@@ -114,12 +114,8 @@
   /* colourful HUD accents */
   body:not(.playing) .hud { visibility: hidden; }
   #start .tagline { margin-top: 2px; font-size: 21px; font-weight: 800; letter-spacing: 12px; color: #7ee0ff; text-shadow: 0 2px 10px rgba(0,0,0,.85); }
-  #menu-left { position: absolute; left: 30px; top: 50%; transform: translateY(-50%); width: 248px; display: flex; flex-direction: column; gap: 11px;
-    padding: 18px; background: rgba(9,14,20,.58); border: 1px solid rgba(255,255,255,.16); border-radius: 16px; text-align: left; }
-  #menu-left .cta { margin-top: 0; width: 100%; font-size: 16px; padding: 12px 10px; letter-spacing: 2px; text-align: center; }
-  #menu-left .cta.alt, #menu-left .cta.load, #menu-left .cta.ctrl { font-size: 14px; padding: 10px; }
-  #menu-left #controls { margin-top: 4px; font-size: 12px; line-height: 1.8; }
-  #menu-left #controls b { min-width: 64px; }
+  #start .menu-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 24px; }
+  #start .menu-row .cta { margin-top: 0; min-width: 172px; text-align: center; }
   #shop { position: fixed; z-index: 18; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(400px, 92vw);
     background: rgba(10,15,22,.94); border: 1px solid rgba(255,217,77,.55); border-radius: 16px; padding: 18px 20px; color: #eef3f7;
     box-shadow: 0 18px 50px rgba(0,0,0,.6); }
@@ -150,9 +146,9 @@
     #wslots { display: none !important; }
     #start h1 { font-size: 38px; }
     #start .tagline { font-size: 15px; letter-spacing: 7px; }
-    #menu-left { position: static; transform: none; width: min(300px, 88vw); margin-top: 20px; }
+    #start .menu-row { flex-direction: column; align-items: center; }
+    #start .menu-row .cta { width: min(300px, 86vw); }
     #controls { display: none; }
-    #menu-left #controls { display: block; }
   }
 </style>
 </head>
@@ -227,21 +223,21 @@
       <span>STEAL ANY CAR</span><span>DAY–NIGHT CYCLE</span><span>6 WEAPONS</span>
     </div>
   </div>
-  <div id="menu-left">
-    <button class="cta alt" id="start-cont" style="display:none">CONTINUE</button>
+  <div class="menu-row">
     <button class="cta" id="start-new">NEW GAME</button>
+    <button class="cta alt" id="start-cont" style="display:none">CONTINUE</button>
     <button class="cta load" id="start-load" style="display:none">LOAD GAME</button>
     <button class="cta ctrl" id="start-controls">CONTROLS</button>
-    <div id="controls-panel">
-    <div id="controls">
-      <div><b>W A S D</b> Walk / drive</div>
-      <div><b>Mouse</b> Camera (click = pointer lock)</div>
-      <div><b>Left click</b> Shoot / punch (on foot)</div>
-      <div><b>F</b> Enter / exit vehicle &nbsp;•&nbsp; <b>Shift</b> Sprint &nbsp;•&nbsp; <b>Space</b> Jump / handbrake</div>
-      <div><b>1–6 / wheel</b> Weapons &nbsp;•&nbsp; <b>R</b> Reload &nbsp;•&nbsp; <b>E</b> Talk / shops / karaoke / house</div>
-      <div><b>Coloured marker</b> = story mission — walk in to start it &nbsp;•&nbsp; <b>Green marker</b> at Rumah Singgah (Monas park) = save point</div>
-    </div>
-    </div>
+  </div>
+  <div id="controls-panel">
+  <div id="controls">
+    <div><b>W A S D</b> Walk / drive</div>
+    <div><b>Mouse</b> Camera (click = pointer lock)</div>
+    <div><b>Left click</b> Shoot / punch (on foot)</div>
+    <div><b>F</b> Enter / exit vehicle &nbsp;•&nbsp; <b>Shift</b> Sprint &nbsp;•&nbsp; <b>Space</b> Jump / handbrake</div>
+    <div><b>1–6 / wheel</b> Weapons &nbsp;•&nbsp; <b>R</b> Reload &nbsp;•&nbsp; <b>E</b> Talk / shops / karaoke / house</div>
+    <div><b>Coloured marker</b> = story mission — walk in to start it &nbsp;•&nbsp; <b>Green marker</b> at Rumah Singgah (Monas park) = save point</div>
+  </div>
   </div>
 </div>
 
