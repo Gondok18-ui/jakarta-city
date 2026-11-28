@@ -40,6 +40,7 @@
   .slot.empty { border-color:#333; }
   @media (max-width:700px){ .slot .cnt{ bottom:2px; font-size:9.5px; } }
   @media (max-width:700px){ .slot{ width:38px; height:38px; border-width:2px; } .slot .nm{ display:none; } }
+  @media (max-width:560px){ .slot{ width:29px; height:29px; border-width:2px; } #hotbar{ gap:2px; padding:3px; max-width:97vw; } }
 
   #help { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(480px,92vw);
     background:rgba(6,22,28,.94); border:2px solid #e8a33d; border-radius:12px; color:#e8ecf4;
@@ -125,9 +126,13 @@
       <tr><td class="k">Shift</td><td>Sprint (in Fly mode: sink)</td></tr>
       <tr><td class="k">In Fly</td><td>Space = rise, Shift = sink</td></tr>
       <tr><td class="k">H</td><td>Show / hide this help</td></tr>
+      <tr><td class="k">Weather</td><td>Clear, cloudy, rain and rare thunderstorms roll in over time</td></tr>
+      <tr><td class="k">Dig deep</td><td>Coal, iron, gold and diamond ores hide in the stone — the deeper, the rarer</td></tr>
+      <tr><td class="k">Torches</td><td>Place torches to light up caves and night builds (the nearest few cast real light)</td></tr>
       <tr><td class="k">Touch</td><td>Left stick to move, drag right side to look, buttons to jump / mine / place</td></tr>
     </table>
     <p style="margin-top:8px;color:#9fb2c8">Your edits and block stock are saved automatically in this browser. The bedrock at the bottom of the world cannot be mined.</p>
+    <p style="margin-top:6px;color:#9fb2c8">Graphics note: sun shadows are on by default; on slower devices they switch themselves off automatically to keep the game smooth.</p>
   </div>
 </div>
 
@@ -185,16 +190,23 @@ window.addEventListener('unhandledrejection', function (e) { window.__VH.errors.
 // ---------- constants ----------
 var CHUNK = 16, WORLD_H = 64, WATER_Y = 15, RENDER_DIST = 4;
 var AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, COBBLE = 4, PLANKS = 5, LOG = 6, LEAVES = 7, SAND = 8, GLASS = 9, BRICK = 10;
+var COAL = 11, IRON = 12, GOLD = 13, DIAMOND = 14, STONEBRICK = 15, TORCH = 16, FLOWER_RED = 17, FLOWER_YEL = 18, TALLGRASS = 19;
 var BLOCK_NAMES = {}; BLOCK_NAMES[GRASS] = 'Grass'; BLOCK_NAMES[DIRT] = 'Dirt'; BLOCK_NAMES[STONE] = 'Stone';
 BLOCK_NAMES[COBBLE] = 'Cobblestone'; BLOCK_NAMES[PLANKS] = 'Planks'; BLOCK_NAMES[LOG] = 'Oak Log';
 BLOCK_NAMES[LEAVES] = 'Leaves'; BLOCK_NAMES[SAND] = 'Sand'; BLOCK_NAMES[GLASS] = 'Glass'; BLOCK_NAMES[BRICK] = 'Brick';
+BLOCK_NAMES[COAL] = 'Coal Ore'; BLOCK_NAMES[IRON] = 'Iron Ore'; BLOCK_NAMES[GOLD] = 'Gold Ore'; BLOCK_NAMES[DIAMOND] = 'Diamond Ore';
+BLOCK_NAMES[STONEBRICK] = 'Stone Bricks'; BLOCK_NAMES[TORCH] = 'Torch'; BLOCK_NAMES[FLOWER_RED] = 'Poppy'; BLOCK_NAMES[FLOWER_YEL] = 'Dandelion'; BLOCK_NAMES[TALLGRASS] = 'Tall Grass';
 var BLOCK_COLORS = {}; BLOCK_COLORS[GRASS] = 0x63b245; BLOCK_COLORS[DIRT] = 0x8a5f3c; BLOCK_COLORS[STONE] = 0x8d8d8d;
 BLOCK_COLORS[COBBLE] = 0x7d7d7d; BLOCK_COLORS[PLANKS] = 0xa97c50; BLOCK_COLORS[LOG] = 0x6b4a2f;
 BLOCK_COLORS[LEAVES] = 0x3e7d2c; BLOCK_COLORS[SAND] = 0xdcd29b; BLOCK_COLORS[GLASS] = 0xcfeef5; BLOCK_COLORS[BRICK] = 0x9e4a38;
-var HOTBAR = [GRASS, DIRT, STONE, COBBLE, PLANKS, LOG, LEAVES, SAND, GLASS, BRICK];
+BLOCK_COLORS[COAL] = 0x3a3a3a; BLOCK_COLORS[IRON] = 0xd8a583; BLOCK_COLORS[GOLD] = 0xf5d13d; BLOCK_COLORS[DIAMOND] = 0x5ff2e0;
+BLOCK_COLORS[STONEBRICK] = 0x8f8f8f; BLOCK_COLORS[TORCH] = 0xe8a33d; BLOCK_COLORS[FLOWER_RED] = 0xe34a6e; BLOCK_COLORS[FLOWER_YEL] = 0xf7c948; BLOCK_COLORS[TALLGRASS] = 0x63b245;
+var HOTBAR = [GRASS, DIRT, STONE, COBBLE, PLANKS, LOG, LEAVES, SAND, GLASS, BRICK, STONEBRICK, TORCH];
 var HARDNESS = {}; HARDNESS[LEAVES] = 0.25; HARDNESS[SAND] = 0.25; HARDNESS[GLASS] = 0.35;
 HARDNESS[DIRT] = 0.45; HARDNESS[GRASS] = 0.45; HARDNESS[LOG] = 0.7; HARDNESS[PLANKS] = 0.7;
 HARDNESS[STONE] = 1.1; HARDNESS[COBBLE] = 1.1; HARDNESS[BRICK] = 1.1;
+HARDNESS[COAL] = 1.0; HARDNESS[IRON] = 1.25; HARDNESS[GOLD] = 1.25; HARDNESS[DIAMOND] = 1.45; HARDNESS[STONEBRICK] = 1.1;
+HARDNESS[TORCH] = 0.06; HARDNESS[FLOWER_RED] = 0.05; HARDNESS[FLOWER_YEL] = 0.05; HARDNESS[TALLGRASS] = 0.05;
 
 // ---------- inventory (block stock, persisted) ----------
 var inv = {};
@@ -204,7 +216,7 @@ var inv = {};
   try {
     var raw = lsGet('vh_inv'); if (!raw) return;
     var obj = JSON.parse(raw); if (!obj || typeof obj !== 'object') return;
-    HOTBAR.forEach(function (b) { if (typeof obj[b] === 'number' && obj[b] >= 0) inv[b] = Math.floor(obj[b]); });
+    for (var kk in obj) { if (typeof obj[kk] === 'number' && obj[kk] >= 0) inv[kk] = Math.floor(obj[kk]); }
   } catch (e) { /* keep defaults */ }
 })();
 var invSaveTimer = null;
@@ -276,6 +288,33 @@ function treeAt(x, z) { // returns trunk height (0 = no tree)
   return t;
 }
 
+// ---------- ores + meadow decoration ----------
+function hash3i(x, y, z) {
+  var h = (Math.imul(x, 374761393) + Math.imul(y, 2246822519) + Math.imul(z, 668265263) + Math.imul(SEED, 974711)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function oreOrStone(x, y, z) {
+  // veins: 2x2x2 cells flagged by hash, then per-block fill — rarer + deeper = richer
+  var cell = hash3i(Math.floor(x / 2), Math.floor(y / 2), Math.floor(z / 2));
+  if (hash3i(x, y, z) >= 0.5) return STONE;
+  if (y < 14 && cell < 0.010) return DIAMOND;
+  if (y < 24 && cell < 0.020) return GOLD;
+  if (y < 40 && cell < 0.042) return IRON;
+  if (cell < 0.062) return COAL;
+  return STONE;
+}
+function isDeco(b) { return b === FLOWER_RED || b === FLOWER_YEL || b === TALLGRASS; }
+function decoAt(x, z) {
+  if (heightAt(x, z) <= WATER_Y + 1) return 0; // grassland only
+  if (treeAt(x, z)) return 0;
+  var r = hash2i(x * 7 + 11, z * 7 + 53);
+  if (r < 0.045) return FLOWER_RED;
+  if (r < 0.09) return FLOWER_YEL;
+  if (r < 0.30) return TALLGRASS;
+  return 0;
+}
+
 // ---------- natural world ----------
 function blockAt(x, y, z) {
   if (y < 0) return STONE;
@@ -285,9 +324,10 @@ function blockAt(x, y, z) {
     if (y === 0) return STONE;
     if (y === h) return h <= WATER_Y + 1 ? SAND : GRASS;
     if (y >= h - 3) return h <= WATER_Y + 1 ? SAND : DIRT;
-    return STONE;
+    return oreOrStone(x, y, z);
   }
   if (y > h + 8) return AIR;
+  if (y === h + 1) { var dc = decoAt(x, z); if (dc) return dc; }
   var th = treeAt(x, z);
   if (th && y > h && y <= h + th) return LOG;
   // leaf canopy: anchors within a 2-block radius
@@ -318,7 +358,7 @@ function getBlock(x, y, z) {
   if (e !== undefined) return e;
   return blockAt(x, y, z);
 }
-function isSolid(x, y, z) { var b = getBlock(x, y, z); return b !== AIR; }
+function isSolid(x, y, z) { var b = getBlock(x, y, z); return b !== AIR && b !== TORCH && !isDeco(b); }
 
 // spawn: first land spot in a spiral around (8, 8)
 var SPAWN = (function () {
@@ -334,116 +374,260 @@ var SPAWN = (function () {
   return { x: 8.5, y: heightAt(8, 8) + 1.01, z: 8.5 };
 })();
 
-// ---------- procedural texture atlas (4x4 tiles of 48px) ----------
-var TILE = { GRASS_TOP: 0, GRASS_SIDE: 1, DIRT: 2, STONE: 3, COBBLE: 4, PLANKS: 5, LOG_SIDE: 6, LOG_TOP: 7, LEAVES: 8, SAND: 9, GLASS: 10, BRICK: 11, WATER: 12 };
-var TILE_PX = 48, ATLAS_COLS = 4;
+// ---------- procedural texture atlas (8x8 tiles of 64px) ----------
+var TILE = { GRASS_TOP: 0, GRASS_SIDE: 1, DIRT: 2, STONE: 3, COBBLE: 4, PLANKS: 5, LOG_SIDE: 6, LOG_TOP: 7, LEAVES: 8, SAND: 9, GLASS: 10, BRICK: 11, WATER: 12, COAL: 13, IRON: 14, GOLD: 15, DIAMOND: 16, STONEBRICK: 17, TORCH: 18, FLOWER_RED: 19, FLOWER_YEL: 20, TALLGRASS: 21 };
+var TILE_PX = 64, ATLAS_COLS = 8;
 function mulberry(seed) { var a = seed >>> 0; return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; var t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 var atlasCanvas = document.createElement('canvas'); atlasCanvas.width = ATLAS_COLS * TILE_PX; atlasCanvas.height = ATLAS_COLS * TILE_PX;
 var tileThumbs = {}; // block id -> dataURL for the hotbar
 (function paintAtlas() {
+  var P = TILE_PX;
   var g = atlasCanvas.getContext('2d');
   function tileCtx(t) {
-    var c = document.createElement('canvas'); c.width = TILE_PX; c.height = TILE_PX;
-    return { c: c, g: c.getContext('2d'), ox: (t % ATLAS_COLS) * TILE_PX, oy: Math.floor(t / ATLAS_COLS) * TILE_PX };
+    var c = document.createElement('canvas'); c.width = P; c.height = P;
+    return { c: c, g: c.getContext('2d'), ox: (t % ATLAS_COLS) * P, oy: Math.floor(t / ATLAS_COLS) * P };
   }
   function speckle(ctx, rnd, colors, n, sMin, sMax) {
     for (var i = 0; i < n; i++) {
       ctx.fillStyle = colors[Math.floor(rnd() * colors.length)];
       var s = sMin + rnd() * (sMax - sMin);
-      ctx.fillRect(rnd() * TILE_PX, rnd() * TILE_PX, s, s);
+      ctx.fillRect(rnd() * P, rnd() * P, s, s);
     }
   }
   function finish(tc) { g.drawImage(tc.c, tc.ox, tc.oy); }
-  var rnd, tc;
-  // grass top
-  rnd = mulberry(101); tc = tileCtx(TILE.GRASS_TOP); tc.g.fillStyle = '#63b245'; tc.g.fillRect(0, 0, 48, 48);
-  speckle(tc.g, rnd, ['#57a03b', '#71c152', '#4c8f33', '#7cc75e'], 260, 1, 3);
-  tc.g.strokeStyle = 'rgba(46,110,28,.55)';
-  for (var i = 0; i < 40; i++) { var bx = rnd() * 46, by = rnd() * 46; tc.g.beginPath(); tc.g.moveTo(bx, by + 3); tc.g.lineTo(bx + 1, by); tc.g.stroke(); }
+  var rnd, tc, i, x;
+  function stoneBase(ctx, seed) {
+    var r2 = mulberry(seed);
+    ctx.fillStyle = '#8d8d8d'; ctx.fillRect(0, 0, P, P);
+    speckle(ctx, r2, ['#7e7e7e', '#9a9a9a', '#747474', '#a5a5a5'], 340, 1, 4);
+    ctx.strokeStyle = 'rgba(88,88,88,.75)'; ctx.lineWidth = 1.2;
+    for (var ci = 0; ci < 8; ci++) {
+      ctx.beginPath();
+      var sx = r2() * 56, sy = r2() * 56;
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + 4 + r2() * 8, sy + 2 - r2() * 5);
+      ctx.lineTo(sx + 7 + r2() * 8, sy + 4 - r2() * 6);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.06)';
+    for (var pi = 0; pi < 4; pi++) ctx.fillRect(r2() * 48, r2() * 48, 9 + r2() * 8, 7 + r2() * 6);
+  }
+  function oreTile(tile, seed, blobs, hi) {
+    var r3 = mulberry(seed); var t3 = tileCtx(tile);
+    stoneBase(t3.g, 104);
+    for (var bi = 0; bi < blobs.length; bi++) {
+      var bx = 6 + r3() * 50, by = 6 + r3() * 50, bs = blobs[bi];
+      t3.g.fillStyle = bs[0];
+      t3.g.fillRect(bx, by, bs[1], bs[2]);
+      t3.g.fillRect(bx + 1.5, by - 1.5, bs[1] - 3, 2.5);
+      t3.g.fillStyle = hi;
+      t3.g.fillRect(bx + 1.5, by + 1.5, 2.2, 2.2);
+    }
+    speckle(t3.g, r3, ['#7e7e7e', '#9a9a9a'], 60, 1, 3);
+    finish(t3);
+  }
+  // grass top — finer blades + denser speckle at 64px
+  rnd = mulberry(101); tc = tileCtx(TILE.GRASS_TOP); tc.g.fillStyle = '#63b245'; tc.g.fillRect(0, 0, P, P);
+  speckle(tc.g, rnd, ['#57a03b', '#71c152', '#4c8f33', '#7cc75e'], 430, 1, 3);
+  tc.g.lineWidth = 1;
+  for (i = 0; i < 95; i++) {
+    var bx = rnd() * 62, by = rnd() * 60;
+    tc.g.strokeStyle = rnd() < 0.5 ? 'rgba(46,110,28,.55)' : 'rgba(150,220,110,.5)';
+    tc.g.beginPath(); tc.g.moveTo(bx, by + 4); tc.g.lineTo(bx + 1 + rnd() * 1.5, by); tc.g.stroke();
+  }
+  speckle(tc.g, rnd, ['#8a5f3c'], 7, 1.5, 2.5);
   finish(tc);
-  // dirt
-  rnd = mulberry(102); tc = tileCtx(TILE.DIRT); tc.g.fillStyle = '#8a5f3c'; tc.g.fillRect(0, 0, 48, 48);
-  speckle(tc.g, rnd, ['#7a5233', '#9a6d45', '#6d4729', '#a87c50'], 240, 1, 4);
-  speckle(tc.g, rnd, ['#b59a77', '#5d3d22'], 26, 2, 3); finish(tc);
-  // grass side = dirt + green fringe on top
-  rnd = mulberry(103); tc = tileCtx(TILE.GRASS_SIDE); tc.g.fillStyle = '#8a5f3c'; tc.g.fillRect(0, 0, 48, 48);
-  speckle(tc.g, rnd, ['#7a5233', '#9a6d45', '#6d4729'], 200, 1, 4);
+  // dirt — pebbles + cracks
+  rnd = mulberry(102); tc = tileCtx(TILE.DIRT); tc.g.fillStyle = '#8a5f3c'; tc.g.fillRect(0, 0, P, P);
+  speckle(tc.g, rnd, ['#7a5233', '#9a6d45', '#6d4729', '#a87c50'], 380, 1, 4);
+  speckle(tc.g, rnd, ['#b59a77', '#5d3d22'], 34, 2, 3.5);
+  tc.g.strokeStyle = 'rgba(70,45,25,.5)';
+  for (i = 0; i < 4; i++) { tc.g.beginPath(); var dx0 = rnd() * 58, dy0 = rnd() * 58; tc.g.moveTo(dx0, dy0); tc.g.lineTo(dx0 + 3 + rnd() * 5, dy0 + 2 - rnd() * 4); tc.g.stroke(); }
+  finish(tc);
+  // grass side = dirt + deeper green fringe
+  rnd = mulberry(103); tc = tileCtx(TILE.GRASS_SIDE); tc.g.fillStyle = '#8a5f3c'; tc.g.fillRect(0, 0, P, P);
+  speckle(tc.g, rnd, ['#7a5233', '#9a6d45', '#6d4729'], 320, 1, 4);
   tc.g.fillStyle = '#5da53f';
-  for (var x = 0; x < 48; x += 2) { var d = 9 + Math.floor(rnd() * 7); tc.g.fillRect(x, 0, 2, d); }
-  tc.g.fillStyle = '#6fbf4a'; tc.g.fillRect(0, 0, 48, 5);
-  speckle(tc.g, rnd, ['#57a03b', '#7cc75e'], 60, 1, 2); finish(tc);
+  for (x = 0; x < P; x += 2) { var dph = 12 + Math.floor(rnd() * 9); tc.g.fillRect(x, 0, 2, dph); }
+  tc.g.fillStyle = '#6fbf4a'; tc.g.fillRect(0, 0, P, 7);
+  speckle(tc.g, rnd, ['#57a03b', '#7cc75e'], 90, 1, 2); finish(tc);
   // stone
-  rnd = mulberry(104); tc = tileCtx(TILE.STONE); tc.g.fillStyle = '#8d8d8d'; tc.g.fillRect(0, 0, 48, 48);
-  speckle(tc.g, rnd, ['#7e7e7e', '#9a9a9a', '#747474', '#a5a5a5'], 220, 1, 4);
-  tc.g.strokeStyle = 'rgba(90,90,90,.7)'; tc.g.lineWidth = 1;
-  for (i = 0; i < 5; i++) { tc.g.beginPath(); var sx = rnd() * 44, sy = rnd() * 44; tc.g.moveTo(sx, sy); tc.g.lineTo(sx + 4 + rnd() * 7, sy + 2 - rnd() * 4); tc.g.stroke(); }
-  finish(tc);
-  // cobblestone: chunky cells with dark mortar
-  rnd = mulberry(105); tc = tileCtx(TILE.COBBLE); tc.g.fillStyle = '#55554f'; tc.g.fillRect(0, 0, 48, 48);
-  var cells = [[2, 2, 13, 11], [17, 2, 14, 11], [33, 2, 13, 11], [2, 15, 10, 13], [14, 15, 16, 13], [32, 15, 14, 13], [2, 30, 14, 16], [18, 30, 13, 16], [33, 30, 13, 16]];
-  for (i = 0; i < cells.length; i++) {
-    var cl = cells[i], tone = ['#7d7d78', '#8a8a84', '#74746e', '#93938c'][Math.floor(rnd() * 4)];
-    tc.g.fillStyle = tone; tc.g.fillRect(cl[0], cl[1], cl[2], cl[3]);
-    tc.g.fillStyle = 'rgba(255,255,255,.13)'; tc.g.fillRect(cl[0], cl[1], cl[2], 3);
-    tc.g.fillStyle = 'rgba(0,0,0,.18)'; tc.g.fillRect(cl[0], cl[1] + cl[3] - 3, cl[2], 3);
+  tc = tileCtx(TILE.STONE); stoneBase(tc.g, 104); finish(tc);
+  // cobblestone: chunky cells with dark mortar + per-cell speckle
+  rnd = mulberry(105); tc = tileCtx(TILE.COBBLE); tc.g.fillStyle = '#55554f'; tc.g.fillRect(0, 0, P, P);
+  var cellRows = [[2, 15], [19, 17], [38, 16], [56, 8]];
+  var cellOff = 0;
+  for (var ri = 0; ri < cellRows.length; ri++) {
+    var ry = cellRows[ri][0], rh = cellRows[ri][1];
+    var cx0 = cellOff;
+    while (cx0 < P - 8) {
+      var cw = 15 + Math.floor(rnd() * 9);
+      if (cx0 + cw > P - 2) cw = P - 2 - cx0;
+      var tone = ['#7d7d78', '#8a8a84', '#74746e', '#93938c'][Math.floor(rnd() * 4)];
+      tc.g.fillStyle = tone; tc.g.fillRect(cx0, ry, cw, rh);
+      tc.g.fillStyle = 'rgba(255,255,255,.13)'; tc.g.fillRect(cx0, ry, cw, 3);
+      tc.g.fillStyle = 'rgba(0,0,0,.18)'; tc.g.fillRect(cx0, ry + rh - 3, cw, 3);
+      speckle(tc.g, rnd, ['rgba(0,0,0,.15)', 'rgba(255,255,255,.10)'], 8, 1, 2);
+      cx0 += cw + 2.5;
+    }
+    cellOff = cellOff === 0 ? -8 : 0;
   }
   finish(tc);
-  // planks: horizontal boards, grain + nails
+  // planks: 4 boards of 16px, grain + knots + nails
   rnd = mulberry(106); tc = tileCtx(TILE.PLANKS);
   for (var row = 0; row < 4; row++) {
-    tc.g.fillStyle = ['#a97c50', '#b0825a', '#a2764a'][row % 3]; tc.g.fillRect(0, row * 12, 48, 12);
-    tc.g.fillStyle = 'rgba(0,0,0,.35)'; tc.g.fillRect(0, row * 12, 48, 1.6);
-    tc.g.strokeStyle = 'rgba(120,82,44,.5)';
-    for (var gl2 = 0; gl2 < 3; gl2++) { tc.g.beginPath(); var gy = row * 12 + 3 + rnd() * 7; tc.g.moveTo(0, gy); tc.g.bezierCurveTo(14, gy + 1.4, 30, gy - 1.4, 48, gy); tc.g.stroke(); }
-    tc.g.fillStyle = 'rgba(60,40,20,.8)'; tc.g.fillRect(3, row * 12 + 5, 2, 2); tc.g.fillRect(43, row * 12 + 5, 2, 2);
-    tc.g.fillStyle = 'rgba(0,0,0,.28)'; tc.g.fillRect(row % 2 ? 30 : 12, row * 12, 1.6, 12);
+    tc.g.fillStyle = ['#a97c50', '#b0825a', '#a2764a'][row % 3]; tc.g.fillRect(0, row * 16, P, 16);
+    tc.g.fillStyle = 'rgba(0,0,0,.35)'; tc.g.fillRect(0, row * 16, P, 2);
+    tc.g.fillStyle = 'rgba(255,255,255,.10)'; tc.g.fillRect(0, row * 16 + 2, P, 1.4);
+    tc.g.strokeStyle = 'rgba(120,82,44,.5)'; tc.g.lineWidth = 1;
+    for (var gl2 = 0; gl2 < 5; gl2++) { tc.g.beginPath(); var gy = row * 16 + 4 + rnd() * 10; tc.g.moveTo(0, gy); tc.g.bezierCurveTo(18, gy + 1.6, 42, gy - 1.6, P, gy); tc.g.stroke(); }
+    var kx = 10 + rnd() * 42, ky = row * 16 + 8;
+    tc.g.strokeStyle = 'rgba(96,62,30,.75)';
+    [4.6, 3.0, 1.6].forEach(function (kr) { tc.g.beginPath(); tc.g.ellipse(kx, ky, kr * 1.5, kr, 0, 0, Math.PI * 2); tc.g.stroke(); });
+    tc.g.fillStyle = 'rgba(50,32,14,.85)'; tc.g.beginPath(); tc.g.arc(kx, ky, 1.3, 0, Math.PI * 2); tc.g.fill();
+    tc.g.fillStyle = 'rgba(60,40,20,.8)'; tc.g.fillRect(4, row * 16 + 7, 2.4, 2.4); tc.g.fillRect(58, row * 16 + 7, 2.4, 2.4);
+    tc.g.fillStyle = 'rgba(0,0,0,.28)'; tc.g.fillRect(row % 2 ? 40 : 16, row * 16, 2, 16);
   }
   finish(tc);
-  // log side: vertical bark stripes
-  rnd = mulberry(107); tc = tileCtx(TILE.LOG_SIDE); tc.g.fillStyle = '#6b4a2f'; tc.g.fillRect(0, 0, 48, 48);
-  for (x = 0; x < 48; x += 3) { tc.g.fillStyle = ['#5d3f27', '#77552f', '#654628'][Math.floor(rnd() * 3)]; tc.g.fillRect(x, 0, 2, 48); }
-  speckle(tc.g, rnd, ['#4e331e', '#82643c'], 60, 1, 3); finish(tc);
+  // log side: vertical bark stripes + knot
+  rnd = mulberry(107); tc = tileCtx(TILE.LOG_SIDE); tc.g.fillStyle = '#6b4a2f'; tc.g.fillRect(0, 0, P, P);
+  for (x = 0; x < P; x += 4) { tc.g.fillStyle = ['#5d3f27', '#77552f', '#654628'][Math.floor(rnd() * 3)]; tc.g.fillRect(x, 0, 2.6, P); }
+  speckle(tc.g, rnd, ['#4e331e', '#82643c'], 90, 1, 3);
+  tc.g.strokeStyle = 'rgba(60,38,18,.8)';
+  [2.6, 1.6].forEach(function (kr) { tc.g.beginPath(); tc.g.ellipse(44, 40, kr * 1.4, kr * 1.9, 0, 0, Math.PI * 2); tc.g.stroke(); });
+  finish(tc);
   // log top: growth rings
-  rnd = mulberry(108); tc = tileCtx(TILE.LOG_TOP); tc.g.fillStyle = '#b08d57'; tc.g.fillRect(0, 0, 48, 48);
-  tc.g.fillStyle = '#6b4a2f'; tc.g.fillRect(0, 0, 48, 3); tc.g.fillRect(0, 45, 48, 3); tc.g.fillRect(0, 0, 3, 48); tc.g.fillRect(45, 0, 3, 48);
-  tc.g.strokeStyle = '#8a6a3e'; tc.g.lineWidth = 2;
-  [17, 12, 7].forEach(function (r) { tc.g.beginPath(); tc.g.arc(24, 24, r, 0, Math.PI * 2); tc.g.stroke(); });
-  tc.g.fillStyle = '#8a6a3e'; tc.g.beginPath(); tc.g.arc(24, 24, 2.6, 0, Math.PI * 2); tc.g.fill(); finish(tc);
-  // leaves: dense clusters with dark holes
-  rnd = mulberry(109); tc = tileCtx(TILE.LEAVES); tc.g.fillStyle = '#2f6123'; tc.g.fillRect(0, 0, 48, 48);
-  speckle(tc.g, rnd, ['#3e7d2c', '#4c8f33', '#57a03b', '#26511b'], 320, 2, 5);
-  speckle(tc.g, rnd, ['#12290c', '#1a3a10'], 46, 2, 4); finish(tc);
+  rnd = mulberry(108); tc = tileCtx(TILE.LOG_TOP); tc.g.fillStyle = '#b08d57'; tc.g.fillRect(0, 0, P, P);
+  tc.g.fillStyle = '#6b4a2f'; tc.g.fillRect(0, 0, P, 4); tc.g.fillRect(0, P - 4, P, 4); tc.g.fillRect(0, 0, 4, P); tc.g.fillRect(P - 4, 0, 4, P);
+  tc.g.strokeStyle = '#8a6a3e'; tc.g.lineWidth = 2.4;
+  [22, 16, 10, 5].forEach(function (r) { tc.g.beginPath(); tc.g.arc(32, 32, r, 0, Math.PI * 2); tc.g.stroke(); });
+  tc.g.fillStyle = '#8a6a3e'; tc.g.beginPath(); tc.g.arc(32, 32, 2.8, 0, Math.PI * 2); tc.g.fill();
+  speckle(tc.g, rnd, ['#c39f68', '#9c7c48'], 40, 1, 2.5); finish(tc);
+  // leaves: clusters, dark holes, pale venation
+  rnd = mulberry(109); tc = tileCtx(TILE.LEAVES); tc.g.fillStyle = '#2f6123'; tc.g.fillRect(0, 0, P, P);
+  speckle(tc.g, rnd, ['#3e7d2c', '#4c8f33', '#57a03b', '#26511b'], 520, 2, 5);
+  speckle(tc.g, rnd, ['#12290c', '#1a3a10'], 70, 2, 4);
+  tc.g.strokeStyle = 'rgba(150,210,115,.32)'; tc.g.lineWidth = 1;
+  for (i = 0; i < 26; i++) {
+    var vx = rnd() * 58, vy = rnd() * 58, va = rnd() * Math.PI * 2, vl = 4 + rnd() * 5;
+    tc.g.beginPath(); tc.g.moveTo(vx, vy); tc.g.lineTo(vx + Math.cos(va) * vl, vy + Math.sin(va) * vl); tc.g.stroke();
+  }
+  speckle(tc.g, rnd, ['#6fbf4a'], 60, 1, 2); finish(tc);
   // sand
-  rnd = mulberry(110); tc = tileCtx(TILE.SAND); tc.g.fillStyle = '#dcd29b'; tc.g.fillRect(0, 0, 48, 48);
-  speckle(tc.g, rnd, ['#cfc188', '#e9e0b2', '#c2b37e'], 240, 1, 3); finish(tc);
-  // glass: faint fill, bright frame, diagonal shine (alpha matters)
-  tc = tileCtx(TILE.GLASS); tc.g.clearRect(0, 0, 48, 48);
-  tc.g.fillStyle = 'rgba(196,232,242,0.30)'; tc.g.fillRect(0, 0, 48, 48);
-  tc.g.strokeStyle = 'rgba(235,250,255,0.95)'; tc.g.lineWidth = 3; tc.g.strokeRect(1.5, 1.5, 45, 45);
-  tc.g.strokeStyle = 'rgba(255,255,255,0.55)'; tc.g.lineWidth = 4;
-  tc.g.beginPath(); tc.g.moveTo(10, 38); tc.g.lineTo(30, 12); tc.g.stroke();
-  tc.g.beginPath(); tc.g.moveTo(24, 40); tc.g.lineTo(38, 22); tc.g.stroke(); finish(tc);
-  // brick: offset rows with mortar
-  rnd = mulberry(111); tc = tileCtx(TILE.BRICK); tc.g.fillStyle = '#b8ada4'; tc.g.fillRect(0, 0, 48, 48);
+  rnd = mulberry(110); tc = tileCtx(TILE.SAND); tc.g.fillStyle = '#dcd29b'; tc.g.fillRect(0, 0, P, P);
+  speckle(tc.g, rnd, ['#cfc188', '#e9e0b2', '#c2b37e'], 380, 1, 3);
+  speckle(tc.g, rnd, ['#a89a72', '#8f8577'], 24, 1.6, 2.6); finish(tc);
+  // glass: faint fill, bright frame, diagonal shine
+  tc = tileCtx(TILE.GLASS); tc.g.clearRect(0, 0, P, P);
+  tc.g.fillStyle = 'rgba(196,232,242,0.30)'; tc.g.fillRect(0, 0, P, P);
+  tc.g.strokeStyle = 'rgba(235,250,255,0.95)'; tc.g.lineWidth = 4; tc.g.strokeRect(2, 2, P - 4, P - 4);
+  tc.g.strokeStyle = 'rgba(255,255,255,0.55)'; tc.g.lineWidth = 5;
+  tc.g.beginPath(); tc.g.moveTo(13, 51); tc.g.lineTo(40, 16); tc.g.stroke();
+  tc.g.beginPath(); tc.g.moveTo(32, 54); tc.g.lineTo(51, 29); tc.g.stroke(); finish(tc);
+  // brick: offset rows, shaded mortar + per-brick shading
+  rnd = mulberry(111); tc = tileCtx(TILE.BRICK); tc.g.fillStyle = '#a89a8d'; tc.g.fillRect(0, 0, P, P);
+  speckle(tc.g, rnd, ['#97887b', '#bdb0a2'], 130, 1, 3);
+  var rowH = P / 6;
   for (row = 0; row < 6; row++) {
-    var off = row % 2 ? -12 : 0;
+    var off = row % 2 ? -16 : 0;
     for (var bx2 = 0; bx2 < 3; bx2++) {
+      var bxx = off + bx2 * 32 + 1.6, byy = row * rowH + 1.6, bww = 28.8, bhh = rowH - 3.2;
       tc.g.fillStyle = ['#9e4a38', '#a8513c', '#94422f'][Math.floor(rnd() * 3)];
-      tc.g.fillRect(off + bx2 * 24 + 1.5, row * 8 + 1.5, 21, 5.4);
+      tc.g.fillRect(bxx, byy, bww, bhh);
+      tc.g.fillStyle = 'rgba(255,255,255,.14)'; tc.g.fillRect(bxx, byy, bww, 2);
+      tc.g.fillStyle = 'rgba(0,0,0,.16)'; tc.g.fillRect(bxx, byy + bhh - 2, bww, 2);
     }
   }
   finish(tc);
-  // water
-  rnd = mulberry(112); tc = tileCtx(TILE.WATER); tc.g.fillStyle = '#2f6fd0'; tc.g.fillRect(0, 0, 48, 48);
-  tc.g.strokeStyle = 'rgba(140,200,255,.5)'; tc.g.lineWidth = 2;
-  for (i = 0; i < 7; i++) { tc.g.beginPath(); var wy = 4 + rnd() * 42, wx = rnd() * 20; tc.g.moveTo(wx, wy); tc.g.lineTo(wx + 12 + rnd() * 14, wy); tc.g.stroke(); }
-  speckle(tc.g, rnd, ['#2a63ba', '#3a7ad8'], 90, 1, 3); finish(tc);
+  // water: longer wave strokes + foam
+  rnd = mulberry(112); tc = tileCtx(TILE.WATER); tc.g.fillStyle = '#2f6fd0'; tc.g.fillRect(0, 0, P, P);
+  tc.g.strokeStyle = 'rgba(140,200,255,.5)'; tc.g.lineWidth = 2.4;
+  for (i = 0; i < 10; i++) { tc.g.beginPath(); var wy = 4 + rnd() * 56, wx = rnd() * 26; tc.g.moveTo(wx, wy); tc.g.lineTo(wx + 16 + rnd() * 18, wy); tc.g.stroke(); }
+  speckle(tc.g, rnd, ['#2a63ba', '#3a7ad8'], 140, 1, 3);
+  speckle(tc.g, rnd, ['rgba(230,245,255,.35)'], 20, 1, 2); finish(tc);
+  // ores: stone base + coloured speckles (coal / iron / gold / diamond)
+  oreTile(TILE.COAL, 113, [['#26262a', 7, 5], ['#26262a', 5, 4], ['#2e2e33', 6, 5], ['#26262a', 4, 4], ['#2e2e33', 5, 3], ['#26262a', 6, 4], ['#2e2e33', 4, 3]], '#55555e');
+  oreTile(TILE.IRON, 114, [['#c98a5e', 6, 5], ['#b5764a', 5, 4], ['#c98a5e', 4, 4], ['#b5764a', 6, 4], ['#c98a5e', 5, 3], ['#b5764a', 4, 3]], '#e8b98c');
+  oreTile(TILE.GOLD, 115, [['#f0c93e', 5, 4], ['#e5b82e', 4, 4], ['#f0c93e', 5, 3], ['#e5b82e', 4, 3], ['#f0c93e', 4, 4]], '#ffec8a');
+  (function () {
+    var r4 = mulberry(116); var t4 = tileCtx(TILE.DIAMOND);
+    stoneBase(t4.g, 104);
+    for (var gi = 0; gi < 6; gi++) {
+      var gx = 10 + r4() * 44, gy = 10 + r4() * 44, gs = 3.4 + r4() * 2.4;
+      t4.g.fillStyle = '#3ec9b8';
+      t4.g.beginPath(); t4.g.moveTo(gx, gy - gs); t4.g.lineTo(gx + gs, gy); t4.g.lineTo(gx, gy + gs); t4.g.lineTo(gx - gs, gy); t4.g.closePath(); t4.g.fill();
+      t4.g.fillStyle = '#5ff2e0';
+      t4.g.beginPath(); t4.g.moveTo(gx, gy - gs * 0.62); t4.g.lineTo(gx + gs * 0.62, gy); t4.g.lineTo(gx, gy + gs * 0.62); t4.g.lineTo(gx - gs * 0.62, gy); t4.g.closePath(); t4.g.fill();
+      t4.g.fillStyle = '#eafffb'; t4.g.fillRect(gx - 1, gy - 1, 2, 2);
+    }
+    finish(t4);
+  })();
+  // stone bricks: big 2-per-row bricks with bevels
+  rnd = mulberry(117); tc = tileCtx(TILE.STONEBRICK); tc.g.fillStyle = '#6a6a6a'; tc.g.fillRect(0, 0, P, P);
+  speckle(tc.g, rnd, ['#5d5d5d', '#787878'], 120, 1, 3);
+  for (row = 0; row < 4; row++) {
+    var off2 = row % 2 ? -16 : 0;
+    for (var bx3 = 0; bx3 < 3; bx3++) {
+      var sx3 = off2 + bx3 * 32 + 1.6, sy3 = row * 16 + 1.6;
+      tc.g.fillStyle = ['#8f8f8f', '#969696', '#888888'][Math.floor(rnd() * 3)];
+      tc.g.fillRect(sx3, sy3, 28.8, 12.8);
+      tc.g.fillStyle = 'rgba(255,255,255,.16)'; tc.g.fillRect(sx3, sy3, 28.8, 2.4);
+      tc.g.fillStyle = 'rgba(0,0,0,.20)'; tc.g.fillRect(sx3, sy3 + 10.4, 28.8, 2.4);
+      tc.g.strokeStyle = 'rgba(0,0,0,.16)'; tc.g.lineWidth = 1; tc.g.strokeRect(sx3 + 1, sy3 + 1, 26.8, 10.8);
+    }
+  }
+  speckle(tc.g, rnd, ['#7e7e7e', '#9a9a9a'], 90, 1, 3); finish(tc);
+  // torch (for item / hotbar): stick + flame on transparency
+  tc = tileCtx(TILE.TORCH); tc.g.clearRect(0, 0, P, P);
+  var stickGrad = tc.g.createLinearGradient(26, 0, 38, 0);
+  stickGrad.addColorStop(0, '#7a5636'); stickGrad.addColorStop(1, '#54391f');
+  tc.g.fillStyle = stickGrad; tc.g.fillRect(27, 26, 10, 38);
+  tc.g.fillStyle = 'rgba(0,0,0,.25)'; tc.g.fillRect(34, 26, 3, 38);
+  tc.g.fillStyle = '#f59a2e';
+  tc.g.beginPath(); tc.g.ellipse(32, 17, 10.5, 13, 0, 0, Math.PI * 2); tc.g.fill();
+  tc.g.fillStyle = '#ffc63e';
+  tc.g.beginPath(); tc.g.ellipse(32, 19, 7, 9.5, 0, 0, Math.PI * 2); tc.g.fill();
+  tc.g.fillStyle = '#fff3b0';
+  tc.g.beginPath(); tc.g.ellipse(32, 21, 3.6, 5.4, 0, 0, Math.PI * 2); tc.g.fill();
+  finish(tc);
+  // flowers: stem + petals on transparency
+  function flowerTile(tile, seed, petal, center) {
+    var r5 = mulberry(seed); var t5 = tileCtx(tile); t5.g.clearRect(0, 0, P, P);
+    t5.g.strokeStyle = '#3e7d2c'; t5.g.lineWidth = 3;
+    t5.g.beginPath(); t5.g.moveTo(32, 64); t5.g.quadraticCurveTo(29, 48, 32, 33); t5.g.stroke();
+    t5.g.fillStyle = '#4c8f33';
+    t5.g.beginPath(); t5.g.ellipse(25, 50, 7, 3.2, -0.6, 0, Math.PI * 2); t5.g.fill();
+    t5.g.beginPath(); t5.g.ellipse(39, 55, 6, 2.8, 0.6, 0, Math.PI * 2); t5.g.fill();
+    t5.g.fillStyle = petal;
+    for (var pt = 0; pt < 6; pt++) {
+      var pa = pt / 6 * Math.PI * 2;
+      t5.g.beginPath(); t5.g.ellipse(32 + Math.cos(pa) * 8.5, 23 + Math.sin(pa) * 8.5, 6.4, 4.6, pa, 0, Math.PI * 2); t5.g.fill();
+    }
+    t5.g.fillStyle = center;
+    t5.g.beginPath(); t5.g.arc(32, 23, 4.6, 0, Math.PI * 2); t5.g.fill();
+    speckle(t5.g, r5, ['rgba(0,0,0,0)'], 0, 1, 1);
+    finish(t5);
+  }
+  flowerTile(TILE.FLOWER_RED, 119, '#e34a6e', '#ffd94a');
+  flowerTile(TILE.FLOWER_YEL, 120, '#f7c948', '#b96f1c');
+  // tall grass: tapering blades on transparency
+  rnd = mulberry(121); tc = tileCtx(TILE.TALLGRASS); tc.g.clearRect(0, 0, P, P);
+  for (i = 0; i < 11; i++) {
+    var bxp = 5 + rnd() * 54, bht = 22 + rnd() * 36, lean = (rnd() - 0.5) * 13;
+    tc.g.strokeStyle = ['#57a03b', '#6fbf4a', '#4c8f33'][Math.floor(rnd() * 3)];
+    tc.g.lineWidth = 3.2; tc.g.lineCap = 'round';
+    tc.g.beginPath(); tc.g.moveTo(bxp, 64); tc.g.quadraticCurveTo(bxp + lean * 0.3, 64 - bht * 0.6, bxp + lean, 64 - bht); tc.g.stroke();
+    tc.g.strokeStyle = 'rgba(190,240,150,.5)'; tc.g.lineWidth = 1.3;
+    tc.g.beginPath(); tc.g.moveTo(bxp + 0.8, 62); tc.g.quadraticCurveTo(bxp + lean * 0.3, 64 - bht * 0.55, bxp + lean, 64 - bht + 2); tc.g.stroke();
+  }
+  finish(tc);
   // hotbar thumbnails (representative face per block)
   var rep = {}; rep[GRASS] = TILE.GRASS_SIDE; rep[DIRT] = TILE.DIRT; rep[STONE] = TILE.STONE; rep[COBBLE] = TILE.COBBLE;
   rep[PLANKS] = TILE.PLANKS; rep[LOG] = TILE.LOG_SIDE; rep[LEAVES] = TILE.LEAVES; rep[SAND] = TILE.SAND; rep[GLASS] = TILE.GLASS; rep[BRICK] = TILE.BRICK;
+  rep[STONEBRICK] = TILE.STONEBRICK; rep[TORCH] = TILE.TORCH;
   HOTBAR.forEach(function (b) {
     var t = rep[b], c = document.createElement('canvas'); c.width = TILE_PX; c.height = TILE_PX;
-    var cg = c.getContext('2d'); cg.fillStyle = '#79a6ff'; cg.fillRect(0, 0, 48, 48);
+    var cg = c.getContext('2d'); cg.fillStyle = '#79a6ff'; cg.fillRect(0, 0, TILE_PX, TILE_PX);
     cg.drawImage(atlasCanvas, (t % ATLAS_COLS) * TILE_PX, Math.floor(t / ATLAS_COLS) * TILE_PX, TILE_PX, TILE_PX, 0, 0, TILE_PX, TILE_PX);
     tileThumbs[b] = c.toDataURL();
   });
@@ -459,12 +643,22 @@ function tileFor(block, isTop, isBottom) {
   if (block === SAND) return TILE.SAND;
   if (block === GLASS) return TILE.GLASS;
   if (block === BRICK) return TILE.BRICK;
+  if (block === COAL) return TILE.COAL;
+  if (block === IRON) return TILE.IRON;
+  if (block === GOLD) return TILE.GOLD;
+  if (block === DIAMOND) return TILE.DIAMOND;
+  if (block === STONEBRICK) return TILE.STONEBRICK;
+  if (block === TORCH) return TILE.TORCH;
+  if (block === FLOWER_RED) return TILE.FLOWER_RED;
+  if (block === FLOWER_YEL) return TILE.FLOWER_YEL;
+  if (block === TALLGRASS) return TILE.TALLGRASS;
   return TILE.STONE;
 }
 
 // ---------- three.js scene ----------
 var renderer, scene, camera, atlasTex;
-var opaqueMat, glassMat, waterMat, cloudMat;
+var opaqueMat, glassMat, waterMat, cloudMat, decoMat, torchMat, torchGlowMat;
+var hemiLight, sunLight, shadowsOn = true, shadowOverride = false;
 try {
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 } catch (e) {
@@ -475,6 +669,10 @@ try {
 }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.domElement.className = 'game';
 document.body.appendChild(renderer.domElement);
 scene = new THREE.Scene();
@@ -482,6 +680,28 @@ scene.background = new THREE.Color(0x6fb7ff);
 scene.fog = new THREE.Fog(0x6fb7ff, 42, 135);
 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 900);
 scene.add(camera);
+hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x77644a, 0.9);
+scene.add(hemiLight);
+sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.left = -72; sunLight.shadow.camera.right = 72;
+sunLight.shadow.camera.top = 72; sunLight.shadow.camera.bottom = -72;
+sunLight.shadow.camera.near = 20; sunLight.shadow.camera.far = 400;
+sunLight.shadow.bias = -0.0003; sunLight.shadow.normalBias = 0.15;
+scene.add(sunLight); scene.add(sunLight.target);
+var torchLights = [];
+for (var tli = 0; tli < 4; tli++) { var tpl = new THREE.PointLight(0xff9a3c, 0, 13, 2); scene.add(tpl); torchLights.push(tpl); }
+var torchPts = [], torchLightTimer = 0, lowFpsT = 0;
+function refreshTorchList() {
+  torchPts = [];
+  edits.forEach(function (v, k) {
+    if (v !== TORCH) return;
+    var yy = k % 128, tmp = (k - yy) / 128, zp = tmp % 4096, xp = (tmp - zp) / 4096;
+    torchPts.push({ x: xp - 2048, y: yy, z: zp - 2048 });
+  });
+}
+refreshTorchList();
 atlasTex = new THREE.CanvasTexture(atlasCanvas);
 atlasTex.magFilter = THREE.NearestFilter;
 atlasTex.minFilter = THREE.NearestFilter;
@@ -491,8 +711,10 @@ var waterTex = new THREE.CanvasTexture(atlasCanvas);
 waterTex.magFilter = THREE.NearestFilter; waterTex.minFilter = THREE.NearestFilter;
 waterTex.generateMipmaps = false; waterTex.colorSpace = THREE.SRGBColorSpace;
 waterTex.wrapS = THREE.RepeatWrapping; waterTex.wrapT = THREE.RepeatWrapping;
-opaqueMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true });
-glassMat = new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+opaqueMat = new THREE.MeshLambertMaterial({ map: atlasTex, vertexColors: true });
+glassMat = new THREE.MeshLambertMaterial({ map: atlasTex, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+decoMat = new THREE.MeshLambertMaterial({ map: atlasTex, alphaTest: 0.45, side: THREE.DoubleSide });
+torchMat = new THREE.MeshBasicMaterial({ vertexColors: true });
 waterMat = new THREE.MeshBasicMaterial({ map: waterTex, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide });
 cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78 });
 window.addEventListener('resize', function () {
@@ -511,23 +733,94 @@ var FACES = [
   { dir: [0, 0, 1], shade: 0.62, corners: [[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]] }
 ];
 function newBucket() { return { pos: [], nor: [], uv: [], col: [], idx: [] }; }
+function aoAt(x, y, z) {
+  var b = getBlock(x, y, z);
+  return (b !== AIR && b !== GLASS && b !== TORCH && !isDeco(b)) ? 1 : 0;
+}
+var AO_LVL = [0.40, 0.62, 0.82, 1.0];
 function pushFace(bk, x, y, z, face, tile, shadeMul) {
   var ndx = bk.pos.length / 3;
   var col = (tile % ATLAS_COLS) / ATLAS_COLS, row = Math.floor(tile / ATLAS_COLS);
   var inset = 0.002;
+  var d = face.dir;
+  var axis = d[0] !== 0 ? 0 : (d[1] !== 0 ? 1 : 2);
+  var t1 = (axis + 1) % 3, t2 = (axis + 2) % 3;
+  var nx = x + d[0], ny = y + d[1], nz = z + d[2];
+  var aos = [];
   for (var i = 0; i < 4; i++) {
     var c = face.corners[i];
     bk.pos.push(x + c[0], y + c[1], z + c[2]);
-    bk.nor.push(face.dir[0], face.dir[1], face.dir[2]);
+    bk.nor.push(d[0], d[1], d[2]);
     var u, v;
-    if (face.dir[1] !== 0) { u = c[0]; v = c[2]; }
-    else if (face.dir[0] !== 0) { u = c[2]; v = c[1]; }
+    if (d[1] !== 0) { u = c[0]; v = c[2]; }
+    else if (d[0] !== 0) { u = c[2]; v = c[1]; }
     else { u = c[0]; v = c[1]; }
     bk.uv.push(col + (u * (1 - inset * 2) + inset) / ATLAS_COLS, 1 - (row + 1 - (v * (1 - inset * 2) + inset)) / ATLAS_COLS);
-    var s = face.shade * (shadeMul || 1);
+    // per-vertex ambient occlusion from the three voxels touching this vertex
+    var s1 = c[t1] === 1 ? 1 : -1, s2 = c[t2] === 1 ? 1 : -1;
+    var o1 = [nx, ny, nz]; o1[t1] += s1;
+    var o2 = [nx, ny, nz]; o2[t2] += s2;
+    var o3 = [nx, ny, nz]; o3[t1] += s1; o3[t2] += s2;
+    var a1 = aoAt(o1[0], o1[1], o1[2]), a2 = aoAt(o2[0], o2[1], o2[2]), a3 = aoAt(o3[0], o3[1], o3[2]);
+    var ao = (a1 && a2) ? 0 : 3 - (a1 + a2 + a3);
+    aos.push(ao);
+    var s = face.shade * (shadeMul || 1) * AO_LVL[ao];
     bk.col.push(s, s, s);
   }
-  bk.idx.push(ndx, ndx + 1, ndx + 2, ndx + 2, ndx + 1, ndx + 3);
+  // flip the quad diagonal toward the brighter pair to avoid AO interpolation smear
+  if (aos[0] + aos[3] > aos[1] + aos[2]) bk.idx.push(ndx, ndx + 1, ndx + 3, ndx, ndx + 3, ndx + 2);
+  else bk.idx.push(ndx, ndx + 1, ndx + 2, ndx + 2, ndx + 1, ndx + 3);
+}
+function decoGeometry(bk) {
+  if (bk.idx.length === 0) return null;
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(bk.pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(bk.nor, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(bk.uv, 2));
+  geo.setIndex(bk.idx);
+  return geo;
+}
+function pushDeco(bk, x, y, z, tile, hgt) {
+  var col = (tile % ATLAS_COLS) / ATLAS_COLS, row = Math.floor(tile / ATLAS_COLS);
+  var inset = 0.002;
+  function quad(ax, az, bx, bz) {
+    var ndx = bk.pos.length / 3;
+    var cs = [[ax, 0, az, 0, 0], [bx, 0, bz, 1, 0], [bx, hgt, bz, 1, 1], [ax, hgt, az, 0, 1]];
+    for (var i = 0; i < 4; i++) {
+      var c = cs[i];
+      bk.pos.push(x + c[0], y + c[1], z + c[2]);
+      bk.nor.push(0, 1, 0);
+      bk.uv.push(col + (c[3] * (1 - inset * 2) + inset) / ATLAS_COLS, 1 - (row + 1 - (c[4] * (1 - inset * 2) + inset)) / ATLAS_COLS);
+    }
+    bk.idx.push(ndx, ndx + 1, ndx + 2, ndx, ndx + 2, ndx + 3);
+  }
+  quad(0.12, 0.12, 0.88, 0.88);
+  quad(0.88, 0.12, 0.12, 0.88);
+}
+function pushBox(bk, x0, y0, z0, x1, y1, z1, r, g, b) {
+  var faces = [
+    { d: [-1, 0, 0], s: 0.78, c: [[x0, y1, z0], [x0, y0, z0], [x0, y1, z1], [x0, y0, z1]] },
+    { d: [1, 0, 0], s: 0.78, c: [[x1, y1, z1], [x1, y0, z1], [x1, y1, z0], [x1, y0, z0]] },
+    { d: [0, -1, 0], s: 0.5, c: [[x1, y0, z1], [x0, y0, z1], [x1, y0, z0], [x0, y0, z0]] },
+    { d: [0, 1, 0], s: 1.0, c: [[x0, y1, z1], [x1, y1, z1], [x0, y1, z0], [x1, y1, z0]] },
+    { d: [0, 0, -1], s: 0.62, c: [[x1, y0, z0], [x0, y0, z0], [x1, y1, z0], [x0, y1, z0]] },
+    { d: [0, 0, 1], s: 0.62, c: [[x0, y0, z1], [x1, y0, z1], [x0, y1, z1], [x1, y1, z1]] }
+  ];
+  for (var f = 0; f < 6; f++) {
+    var fc = faces[f], ndx = bk.pos.length / 3;
+    for (var i = 0; i < 4; i++) {
+      bk.pos.push(fc.c[i][0], fc.c[i][1], fc.c[i][2]);
+      bk.nor.push(fc.d[0], fc.d[1], fc.d[2]);
+      bk.uv.push(0, 0);
+      bk.col.push(r * fc.s, g * fc.s, b * fc.s);
+    }
+    bk.idx.push(ndx, ndx + 1, ndx + 2, ndx + 2, ndx + 1, ndx + 3);
+  }
+}
+function pushTorch(bk, glow, x, y, z) {
+  pushBox(bk, x + 0.44, y, z + 0.44, x + 0.56, y + 0.62, z + 0.56, 0.45, 0.32, 0.19); // stick
+  pushBox(bk, x + 0.40, y + 0.60, z + 0.40, x + 0.60, y + 0.88, z + 0.60, 1.0, 0.60, 0.14); // flame
+  glow.push(x + 0.5, y + 0.74, z + 0.5);
 }
 function bucketGeometry(bk) {
   if (bk.idx.length === 0) return null;
@@ -544,7 +837,9 @@ function buildChunk(cx, cz) {
   var key = cx + ',' + cz;
   var old = chunkMeshes.get(key);
   if (old) { scene.remove(old.group); old.group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); chunkMeshes.delete(key); }
-  var op = newBucket(), gl = newBucket(), wa = newBucket();
+  var op = newBucket(), gl = newBucket(), wa = newBucket(), tor = newBucket();
+  var dc = { pos: [], nor: [], uv: [], idx: [] };
+  var glowPos = [];
   var x0 = cx * CHUNK, z0 = cz * CHUNK;
   for (var x = 0; x < CHUNK; x++) {
     for (var z = 0; z < CHUNK; z++) {
@@ -566,11 +861,13 @@ function buildChunk(cx, cz) {
       for (var y = 0; y < WORLD_H; y++) {
         var b = getBlock(wx, y, wz);
         if (b === AIR) continue;
+        if (isDeco(b)) { pushDeco(dc, wx, y, wz, tileFor(b, false, false), b === TALLGRASS ? 0.85 : 0.75); continue; }
+        if (b === TORCH) { pushTorch(tor, glowPos, wx, y, wz); continue; }
         var bk = b === GLASS ? gl : op;
         for (var f = 0; f < 6; f++) {
           var face = FACES[f];
           var nb = getBlock(wx + face.dir[0], y + face.dir[1], wz + face.dir[2]);
-          var visible = (nb === AIR || nb === GLASS) && nb !== b;
+          var visible = nb !== b && (nb === AIR || nb === GLASS || nb === TORCH || isDeco(nb));
           if (!visible) continue;
           pushFace(bk, wx, y, wz, face, tileFor(b, face.dir[1] === 1, face.dir[1] === -1), 1);
         }
@@ -579,9 +876,18 @@ function buildChunk(cx, cz) {
   }
   var group = new THREE.Group();
   var entry = { group: group, op: null, gl: null, wa: null };
-  var gOp = bucketGeometry(op); if (gOp) { entry.op = new THREE.Mesh(gOp, opaqueMat); group.add(entry.op); }
-  var gGl = bucketGeometry(gl); if (gGl) { entry.gl = new THREE.Mesh(gGl, glassMat); group.add(entry.gl); }
+  var gOp = bucketGeometry(op); if (gOp) { entry.op = new THREE.Mesh(gOp, opaqueMat); entry.op.castShadow = true; entry.op.receiveShadow = true; group.add(entry.op); }
+  var gGl = bucketGeometry(gl); if (gGl) { entry.gl = new THREE.Mesh(gGl, glassMat); entry.gl.receiveShadow = true; group.add(entry.gl); }
   var gWa = bucketGeometry(wa); if (gWa) { entry.wa = new THREE.Mesh(gWa, waterMat); group.add(entry.wa); }
+  var gDc = decoGeometry(dc); if (gDc) { var dm = new THREE.Mesh(gDc, decoMat); group.add(dm); }
+  var gTor = bucketGeometry(tor); if (gTor) { var tm = new THREE.Mesh(gTor, torchMat); group.add(tm); }
+  if (glowPos.length && torchGlowMat) {
+    var gg = new THREE.BufferGeometry();
+    gg.setAttribute('position', new THREE.Float32BufferAttribute(glowPos, 3));
+    var pts = new THREE.Points(gg, torchGlowMat);
+    pts.frustumCulled = false;
+    group.add(pts);
+  }
   scene.add(group);
   chunkMeshes.set(key, entry);
 }
@@ -628,6 +934,7 @@ function glowTexture(inner, outer) {
   g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
   var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+torchGlowMat = new THREE.PointsMaterial({ map: glowTexture('rgba(255,196,96,1)', 'rgba(255,130,30,.45)'), color: 0xffc37a, size: 2.3, sizeAttenuation: true, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending });
 var sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,244,190,1)', 'rgba(255,176,66,.55)'), fog: false, depthWrite: false, transparent: true }));
 sunSprite.scale.set(90, 90, 1); scene.add(sunSprite);
 var moonSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(225,235,255,1)', 'rgba(150,180,255,.35)'), fog: false, depthWrite: false, transparent: true }));
@@ -668,6 +975,8 @@ function skyColorAt(hours, out) {
   out.copy(SKY_STOPS[0][1]); return out;
 }
 var _sky = new THREE.Color();
+var _white = new THREE.Color(0xffffff);
+var _sunTint = new THREE.Color();
 function updateSky(hours, px, py, pz) {
   var ang = (hours - 6) / 12 * Math.PI; // 06:00 sunrise -> 18:00 sunset
   var elev = Math.sin(ang);
@@ -675,23 +984,43 @@ function updateSky(hours, px, py, pz) {
   var bright = 0.24 + 0.76 * dayness;
   var warm = Math.max(0, 1 - Math.abs(elev) * 2.4) * (elev > -0.25 ? 1 : 0);
   skyColorAt(hours, _sky);
+  _sky.multiply(weatherCur.tint);
   scene.background.copy(_sky);
   scene.fog.color.copy(_sky);
+  scene.fog.near = 42 * weatherCur.fog;
+  scene.fog.far = 135 * weatherCur.fog;
+  var flash = weatherCur.flash;
+  // hemisphere + sun/moon lights (the Lambert world is lit by these)
+  hemiLight.intensity = (0.34 + 0.60 * dayness) * weatherCur.sun * (1 + flash * 2.2);
+  hemiLight.color.copy(_sky).lerp(_white, 0.55);
+  if (elev > -0.06) {
+    _sunTint.setHex(0xffe7c4).lerp(_white, Math.min(1, elev * 1.6 + 0.25));
+    sunLight.color.copy(_sunTint);
+    sunLight.intensity = (0.25 + 0.85 * Math.max(0, elev)) * weatherCur.sun + flash * 1.5;
+    sunLight.position.set(px + Math.cos(ang) * 190, py + Math.max(elev, 0.04) * 190, pz + 60);
+  } else {
+    sunLight.color.setHex(0x93a7d9);
+    sunLight.intensity = 0.13 * weatherCur.sun + flash * 1.5;
+    sunLight.position.set(px - Math.cos(ang) * 190, py + Math.max(-elev, 0.05) * 190, pz - 60);
+  }
+  sunLight.target.position.set(px, py, pz);
+  // unlit materials still take the classic day tint
   var r = Math.min(1, bright * (1 + warm * 0.12)), gg = bright * (1 - warm * 0.04), bb = bright * (1 - warm * 0.22);
-  opaqueMat.color.setRGB(r, gg, bb);
-  glassMat.color.setRGB(r, gg, bb);
+  opaqueMat.color.setRGB(1, 1 - warm * 0.02, 1 - warm * 0.07);
+  glassMat.color.copy(opaqueMat.color);
   for (var im = 0; im < allItemMats.length; im++) allItemMats[im].color.setRGB(r, gg, bb);
   waterMat.color.setRGB(r, gg, Math.min(1, bb * 1.05));
-  cloudMat.color.setRGB(Math.min(1, bright * 1.05), Math.min(1, bright * 1.02), Math.min(1, bright * 1.08));
+  var cb = bright * (0.45 + 0.55 * weatherCur.tint.r);
+  cloudMat.color.setRGB(Math.min(1, cb * 1.05), Math.min(1, cb * 1.02), Math.min(1, cb * 1.08));
+  cloudMat.opacity = weatherCur.cloud;
   var sx = Math.cos(ang) * 330, sy = elev * 330;
   sunSprite.position.set(px + sx, py + sy, pz + 70);
   sunSprite.material.opacity = elev > -0.12 ? 1 : 0;
   moonSprite.position.set(px - sx, py - sy, pz - 70);
   moonSprite.material.opacity = elev < 0.12 ? Math.min(1, -elev * 2 + 0.6) : 0;
-  starMat.opacity = Math.min(1, Math.max(0, -elev * 1.8 + 0.25));
+  starMat.opacity = Math.min(1, Math.max(0, -elev * 1.8 + 0.25)) * (1 - weatherCur.rain) * weatherCur.tint.r;
   stars.position.set(px, 0, pz);
 }
-
 // ---------- block-break particles ----------
 var PMAX = 320;
 var pGeo = new THREE.BufferGeometry();
@@ -762,10 +1091,28 @@ function itemMatsFor(block) {
   return arr;
 }
 var itemGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
+var torchItemMats = null;
+function makeItemMesh(block) {
+  if (block !== TORCH) return new THREE.Mesh(itemGeo, itemMatsFor(block));
+  if (!torchItemMats) {
+    torchItemMats = {
+      stick: new THREE.MeshBasicMaterial({ color: 0x74522f }),
+      flame: new THREE.MeshBasicMaterial({ color: 0xff9d2e })
+    };
+    allItemMats.push(torchItemMats.stick); // stick follows the day tint; the flame stays bright
+  }
+  var grp = new THREE.Group();
+  var st = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.30, 0.09), torchItemMats.stick);
+  st.position.y = -0.04;
+  var fl = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.17, 0.15), torchItemMats.flame);
+  fl.position.y = 0.18;
+  grp.add(st); grp.add(fl);
+  return grp;
+}
 var items = [];
 function spawnItem(x, y, z, block) {
   if (items.length > 220) { var old = items.shift(); scene.remove(old.mesh); }
-  var mesh = new THREE.Mesh(itemGeo, itemMatsFor(block));
+  var mesh = makeItemMesh(block);
   mesh.position.set(x + 0.5 + (Math.random() - 0.5) * 0.24, y + 0.6, z + 0.5 + (Math.random() - 0.5) * 0.24);
   scene.add(mesh);
   items.push({ mesh: mesh, block: block, vy: 2.6, age: 0, resting: false, restY: 0, spin: Math.random() * 6.28 });
@@ -850,16 +1197,18 @@ scene.add(crackMesh);
 var pops = [];
 var popGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
 function spawnPop(x, y, z, block) {
-  var mesh = new THREE.Mesh(popGeo, itemMatsFor(block));
+  var mesh = block === TORCH ? makeItemMesh(block) : new THREE.Mesh(popGeo, itemMatsFor(block));
+  var base = block === TORCH ? 2.9 : 1;
+  mesh.scale.setScalar(base);
   mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
   scene.add(mesh);
-  pops.push({ mesh: mesh, t: 0 });
+  pops.push({ mesh: mesh, t: 0, base: base });
 }
 function updatePops(dt) {
   for (var i = pops.length - 1; i >= 0; i--) {
     var p = pops[i]; p.t += dt / 0.12;
     if (p.t >= 1) { scene.remove(p.mesh); pops.splice(i, 1); continue; }
-    var s = 1 + 0.15 * (1 - p.t) * (1 - p.t);
+    var s = (p.base || 1) * (1 + 0.15 * (1 - p.t) * (1 - p.t));
     p.mesh.scale.set(s, s, s);
   }
 }
@@ -889,11 +1238,11 @@ var heldMesh = null;
   part(sleeveMat, 0.17, 0.17, 0.44, 0, 0, 0.14);   // forearm, ink-teal sleeve
   part(cuffMat, 0.19, 0.19, 0.08, 0, 0, -0.1);     // amber cuff band
   part(skinMat, 0.15, 0.15, 0.2, 0, 0.01, -0.24);  // hand
-  heldMesh = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.23, 0.23), heldMatsFor(HOTBAR[0]));
+  heldMesh = new THREE.Group();
   heldMesh.position.set(-0.02, 0.14, -0.34);
   heldMesh.rotation.set(0.4, 0.6, 0);
-  heldMesh.renderOrder = 999;
   armGroup.add(heldMesh);
+  refreshHeld();
   armGroup.position.set(armBasePos.x, armBasePos.y, armBasePos.z);
   armGroup.rotation.set(0.12, -0.45, 0.12);
   armGroup.visible = false;
@@ -1067,6 +1416,7 @@ var selectedSlot = 0;
 function setBlockAndSave(x, y, z, id) {
   edits.set(wkey(x, y, z), id);
   saveEdits();
+  refreshTorchList();
   rebuildAround(x, z);
 }
 function mineTarget() {
@@ -1075,7 +1425,7 @@ function mineTarget() {
   if (hit.y === 0) { toast('Bedrock cannot be mined'); return false; }
   setBlockAndSave(hit.x, hit.y, hit.z, AIR);
   spawnParticles(hit.x, hit.y, hit.z, hit.block);
-  spawnItem(hit.x, hit.y, hit.z, hit.block);
+  if (!isDeco(hit.block)) spawnItem(hit.x, hit.y, hit.z, hit.block);
   return true;
 }
 // ---------- hold-to-mine ----------
@@ -1102,7 +1452,7 @@ function updateMining(dt, hit) {
     var bx = mining.x, by = mining.y, bz = mining.z, bb = mining.block;
     setBlockAndSave(bx, by, bz, AIR);
     spawnParticles(bx, by, bz, bb);
-    spawnItem(bx, by, bz, bb);
+    if (!isDeco(bb)) spawnItem(bx, by, bz, bb);
     resetMining();
     return;
   }
@@ -1119,7 +1469,8 @@ function placeTarget() {
   if ((inv[block] || 0) <= 0) { toast('No ' + BLOCK_NAMES[block] + ' left \u2014 mine some!'); return false; }
   var x = hit.x + hit.nx, y = hit.y + hit.ny, z = hit.z + hit.nz;
   if (y < 0 || y >= WORLD_H) return false;
-  if (getBlock(x, y, z) !== AIR) return false;
+  var existing = getBlock(x, y, z);
+  if (existing !== AIR && !isDeco(existing)) return false;
   // never place inside the player's own body
   if (x + 1 > player.pos.x - PW && x < player.pos.x + PW && z + 1 > player.pos.z - PW && z < player.pos.z + PW &&
       y + 1 > player.pos.y && y < player.pos.y + PH) return false;
@@ -1167,10 +1518,28 @@ function refreshHotbar() {
   }
 }
 refreshHotbar();
+function refreshHeld() {
+  if (!heldMesh) return;
+  while (heldMesh.children.length) heldMesh.remove(heldMesh.children[0]);
+  var b = HOTBAR[selectedSlot];
+  var m;
+  if (b === TORCH) {
+    m = makeItemMesh(TORCH);
+    m.scale.setScalar(0.85);
+    m.traverse(function (o) {
+      o.renderOrder = 999;
+      if (o.material) { o.material = o.material.clone(); o.material.depthTest = false; o.material.fog = false; }
+    });
+  } else {
+    m = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.23, 0.23), heldMatsFor(b));
+    m.renderOrder = 999;
+  }
+  heldMesh.add(m);
+}
 function selectSlot(i) {
   selectedSlot = i;
   slotEls.forEach(function (el, j) { el.classList.toggle('sel', j === i); });
-  if (heldMesh) heldMesh.material = heldMatsFor(HOTBAR[i]);
+  refreshHeld();
   toast(BLOCK_NAMES[HOTBAR[i]] + ' \u00d7 ' + (inv[HOTBAR[i]] || 0));
 }
 function fmtTime(hours) {
@@ -1277,6 +1646,110 @@ btnMineEl.addEventListener('pointerdown', function (e) { e.preventDefault(); tou
 document.getElementById('btnPlace').addEventListener('pointerdown', function (e) { e.preventDefault(); if (playing) placeTarget(); });
 document.getElementById('btnFly').addEventListener('pointerdown', function (e) { e.preventDefault(); if (playing) toggleFly(); });
 
+// ---------- weather ----------
+var WEATHERS = {
+  clear:  { tint: new THREE.Color(1.0, 1.0, 1.0), fog: 1.0, sun: 1.0, cloud: 0.78, rain: 0 },
+  cloudy: { tint: new THREE.Color(0.80, 0.85, 0.93), fog: 0.78, sun: 0.55, cloud: 0.96, rain: 0 },
+  rain:   { tint: new THREE.Color(0.60, 0.67, 0.78), fog: 0.52, sun: 0.34, cloud: 0.97, rain: 0.85 },
+  storm:  { tint: new THREE.Color(0.47, 0.54, 0.67), fog: 0.42, sun: 0.24, cloud: 1.0, rain: 1.0 }
+};
+var WEATHER_ICON = { clear: '\u2600', cloudy: '\u2601', rain: '\uD83C\uDF27', storm: '\u26C8' };
+var WEATHER_LABEL = { clear: 'Clear', cloudy: 'Cloudy', rain: 'Rain', storm: 'Storm' };
+var weatherCur = { tint: new THREE.Color(1, 1, 1), fog: 1, sun: 1, cloud: 0.78, rain: 0, flash: 0 };
+var weather = { to: 'clear', timer: 130, hold: 0, flashTimer: 9, flash2: -1 };
+function setWeather(name, snap) {
+  if (!WEATHERS[name]) return;
+  weather.to = name;
+  weather.hold = 0;
+  weather.timer = 120 + Math.random() * 120;
+  if (snap) {
+    var t = WEATHERS[name];
+    weatherCur.tint.copy(t.tint); weatherCur.fog = t.fog; weatherCur.sun = t.sun;
+    weatherCur.cloud = t.cloud; weatherCur.rain = t.rain;
+  }
+}
+// rain: recycled points in a box that wraps around the camera
+var RAIN_N = 800;
+var rainGeo = new THREE.BufferGeometry();
+var rainPos = new Float32Array(RAIN_N * 3);
+(function initRain() {
+  for (var i = 0; i < RAIN_N; i++) {
+    rainPos[i * 3] = (Math.random() - 0.5) * 64;
+    rainPos[i * 3 + 1] = Math.random() * 42;
+    rainPos[i * 3 + 2] = (Math.random() - 0.5) * 64;
+  }
+  rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+})();
+var rainCanvas = document.createElement('canvas'); rainCanvas.width = 32; rainCanvas.height = 64;
+(function paintRain() {
+  var g = rainCanvas.getContext('2d');
+  var grad = g.createLinearGradient(0, 0, 0, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad; g.fillRect(13, 0, 6, 64);
+})();
+var rainMat = new THREE.PointsMaterial({ size: 0.85, map: new THREE.CanvasTexture(rainCanvas), transparent: true, opacity: 0, depthWrite: false, color: 0xb9d2ee, sizeAttenuation: true });
+var rainPts = new THREE.Points(rainGeo, rainMat);
+rainPts.frustumCulled = false; rainPts.visible = false;
+scene.add(rainPts);
+function updateRain(dt) {
+  var amt = weatherCur.rain;
+  rainPts.visible = amt > 0.03;
+  if (!rainPts.visible) return;
+  rainMat.opacity = amt * 0.55;
+  var cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+  var fall = 30 * (0.75 + amt * 0.35);
+  for (var i = 0; i < RAIN_N; i++) {
+    var rx = rainPos[i * 3] + dt * 1.6 - cx;
+    var ry = rainPos[i * 3 + 1] - fall * dt - cy;
+    var rz = rainPos[i * 3 + 2] - cz;
+    rx -= Math.floor(rx / 64 + 0.5) * 64;
+    ry -= Math.floor(ry / 42 + 0.5) * 42;
+    rz -= Math.floor(rz / 64 + 0.5) * 64;
+    rainPos[i * 3] = cx + rx;
+    rainPos[i * 3 + 1] = cy + ry;
+    rainPos[i * 3 + 2] = cz + rz;
+  }
+  rainGeo.attributes.position.needsUpdate = true;
+}
+function updateWeather(dt) {
+  if (weather.hold > 0) weather.hold -= dt;
+  else {
+    weather.timer -= dt;
+    if (weather.timer <= 0) {
+      var roll = Math.random();
+      var next = roll < 0.40 ? 'clear' : (roll < 0.70 ? 'cloudy' : (roll < 0.90 ? 'rain' : 'storm'));
+      if (next === weather.to) next = next === 'clear' ? 'cloudy' : 'clear';
+      weather.to = next;
+      weather.timer = 120 + Math.random() * 120;
+    }
+  }
+  var tgt = WEATHERS[weather.to];
+  var k = 1 - Math.exp(-dt / 2.2);
+  weatherCur.tint.lerp(tgt.tint, k);
+  weatherCur.fog += (tgt.fog - weatherCur.fog) * k;
+  weatherCur.sun += (tgt.sun - weatherCur.sun) * k;
+  weatherCur.cloud += (tgt.cloud - weatherCur.cloud) * k;
+  weatherCur.rain += (tgt.rain - weatherCur.rain) * k;
+  // lightning: random flashes while a storm is overhead, sometimes a double strike
+  if (weather.to === 'storm' && weatherCur.rain > 0.65) {
+    weather.flashTimer -= dt;
+    if (weather.flashTimer <= 0) {
+      weatherCur.flash = 1;
+      weather.flashTimer = 6 + Math.random() * 9;
+      if (Math.random() < 0.3) weather.flash2 = 0.16;
+    }
+  }
+  if (weather.flash2 > 0) {
+    weather.flash2 -= dt;
+    if (weather.flash2 <= 0) weatherCur.flash = Math.max(weatherCur.flash, 0.9);
+  }
+  weatherCur.flash *= Math.exp(-dt * 11);
+  if (weatherCur.flash < 0.01) weatherCur.flash = 0;
+  updateRain(dt);
+}
+
 // ---------- day cycle + main loop ----------
 var DAY_LENGTH = 600; // seconds per full day
 var dayTime = 9 / 24; // start at 09:00
@@ -1335,6 +1808,7 @@ function animate() {
   landDipY += landDipV * dt;
   waterTex.offset.set(Math.sin(perfT * 0.33) * 0.012, Math.cos(perfT * 0.26) * 0.012);
   waterMat.opacity = 0.70 + 0.05 * Math.sin(perfT * 0.8);
+  updateWeather(dt);
   updateSky(hours, camera.position.x, camera.position.y, camera.position.z);
   statTimer += dt;
   if (statTimer > 0.25 && playing) {
@@ -1343,12 +1817,43 @@ function animate() {
     statsEl.innerHTML = 'FPS <b>' + Math.round(fpsEMA) + '</b> &nbsp; XYZ <b>' +
       player.pos.x.toFixed(1) + ' / ' + player.pos.y.toFixed(1) + ' / ' + player.pos.z.toFixed(1) + '</b><br>' +
       (isDay ? '☀ Day' : '☾ Night') + ' <b>' + fmtTime(hours) + '</b> &nbsp;·&nbsp; ' +
-      (player.fly ? 'Flying' : 'Walking') + ' &nbsp;·&nbsp; Block: <b>' + BLOCK_NAMES[HOTBAR[selectedSlot]] + '</b>';
+      (player.fly ? 'Flying' : 'Walking') + ' &nbsp;·&nbsp; Block: <b>' + BLOCK_NAMES[HOTBAR[selectedSlot]] + '</b><br>' +
+      WEATHER_ICON[weather.to] + ' ' + WEATHER_LABEL[weather.to];
   }
   var li = document.getElementById('loadInfo');
   if (li && !playing) {
     var total = (RENDER_DIST * 2 + 1) * (RENDER_DIST * 2 + 1);
     li.textContent = chunkMeshes.size >= total ? 'World ready — seed ' + SEED : 'Building world… ' + chunkMeshes.size + ' / ' + total + ' chunks';
+  }
+  // torch glow flicker + real light from the four nearest torches
+  if (torchGlowMat) torchGlowMat.opacity = 0.42 + 0.13 * Math.sin(perfT * 11) + 0.05 * Math.sin(perfT * 23 + 1.7);
+  torchLightTimer += dt;
+  if (torchLightTimer > 0.25) {
+    torchLightTimer = 0;
+    var sortedT = torchPts.slice().sort(function (a, b) {
+      var da = (a.x + 0.5 - player.pos.x) * (a.x + 0.5 - player.pos.x) + (a.z + 0.5 - player.pos.z) * (a.z + 0.5 - player.pos.z);
+      var db = (b.x + 0.5 - player.pos.x) * (b.x + 0.5 - player.pos.x) + (b.z + 0.5 - player.pos.z) * (b.z + 0.5 - player.pos.z);
+      return da - db;
+    });
+    for (var tix = 0; tix < torchLights.length; tix++) {
+      var TL = torchLights[tix];
+      if (tix < sortedT.length) {
+        var tp2 = sortedT[tix];
+        TL.position.set(tp2.x + 0.5, tp2.y + 0.8, tp2.z + 0.5);
+        TL.intensity = 15 + Math.sin(perfT * 13 + tix * 2.1) * 3;
+      } else TL.intensity = 0;
+    }
+  }
+  // adaptive quality: sustained low FPS switches sun shadows off (once)
+  if (playing && shadowsOn && !shadowOverride && perfT > 12) {
+    if (fpsEMA < 30) {
+      lowFpsT += dt;
+      if (lowFpsT > 4) {
+        shadowsOn = false;
+        sunLight.castShadow = false;
+        toast('Sun shadows off (performance)');
+      }
+    } else lowFpsT = 0;
   }
   renderer.render(scene, camera);
 }
@@ -1380,6 +1885,8 @@ window.__VH.getState = function () {
     inventory: invTotal(),
     itemsActive: items.length,
     miningProgress: mining.active ? +mining.progress.toFixed(3) : 0,
+    weather: weather.to,
+    shadowsOn: shadowsOn,
     errors: window.__VH.errors
   };
 };
@@ -1401,7 +1908,13 @@ window.__VH.debug = {
     spawnItem(Math.floor(fx), Math.floor(player.pos.y) + 1, Math.floor(fz), b || GRASS);
   },
   give: function (b, n) { invAdd(b || GRASS, n || 16); },
-  inv: function () { var o = {}; for (var k in inv) o[k] = inv[k]; return o; }
+  inv: function () { var o = {}; for (var k in inv) o[k] = inv[k]; return o; },
+  setWeather: function (name) { setWeather(name, true); weather.hold = 1e9; },
+  setShadows: function (on) { shadowsOn = !!on; shadowOverride = true; if (sunLight) sunLight.castShadow = shadowsOn; },
+  setTime: function (h01) { dayTime = ((h01 % 1) + 1) % 1; },
+  setBlock: function (x, y, z, id) { setBlockAndSave(x, y, z, id); },
+  torchCount: function () { return torchPts.length; },
+  ids: { GRASS: GRASS, DIRT: DIRT, STONE: STONE, COAL: COAL, IRON: IRON, GOLD: GOLD, DIAMOND: DIAMOND, STONEBRICK: STONEBRICK, TORCH: TORCH, FLOWER_RED: FLOWER_RED, FLOWER_YEL: FLOWER_YEL, TALLGRASS: TALLGRASS }
 };
 animate();
 
