@@ -23,6 +23,15 @@
   #toast { position:absolute; left:50%; top:16%; transform:translateX(-50%); color:#fff;
     background:rgba(0,0,0,.55); padding:7px 18px; border-radius:8px; font-size:15px; opacity:0;
     transition:opacity .25s; text-shadow:1px 1px 2px #000; white-space:nowrap; }
+  #hearts { position:absolute; left:50%; bottom:102px; transform:translateX(-50%);
+    font-size:19px; letter-spacing:2px; color:#ff4d5e; text-shadow:1px 1px 3px rgba(0,0,0,.9); white-space:nowrap; }
+  #hearts .he { color:rgba(46,10,14,.9); }
+  #mats { position:absolute; left:50%; bottom:82px; transform:translateX(-50%);
+    font-size:13px; color:#ffe9b0; font-family:'Consolas','Menlo',monospace;
+    text-shadow:1px 1px 2px rgba(0,0,0,.9); white-space:nowrap; }
+  #dmgFlash { position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:radial-gradient(ellipse at center, rgba(200,0,0,0) 42%, rgba(200,10,10,.55) 100%); }
+  @media (max-width:700px){ #hearts{ bottom:86px; font-size:16px; } #mats{ bottom:68px; font-size:11.5px; } }
   #hotbar { position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
     display:flex; gap:3px; background:rgba(0,0,0,.35); padding:4px; border-radius:8px; }
   .slot { width:52px; height:52px; border:3px solid #4a4a4a; border-radius:5px; position:relative;
@@ -113,6 +122,9 @@
   <div id="stats"></div>
   <div id="crosshair">+</div>
   <div id="toast"></div>
+  <div id="dmgFlash"></div>
+  <div id="hearts"></div>
+  <div id="mats"></div>
   <div id="hotbar"></div>
   <div id="help" class="hidden">
     <h2>VOXELHAVEN — Controls</h2>
@@ -129,6 +141,8 @@
       <tr><td class="k">Weather</td><td>Clear, cloudy, rain and rare thunderstorms roll in over time</td></tr>
       <tr><td class="k">Dig deep</td><td>Coal, iron, gold and diamond ores hide in the stone — the deeper, the rarer</td></tr>
       <tr><td class="k">Torches</td><td>Place torches to light up caves and night builds (the nearest few cast real light)</td></tr>
+      <tr><td class="k">Creatures</td><td>Mossbacks and Puffhens graze by day — your swing can hunt them for meat and feathers</td></tr>
+      <tr><td class="k">Shades</td><td>After dark, Shades hunt YOU. Guard your hearts — they vanish at dawn</td></tr>
       <tr><td class="k">Touch</td><td>Left stick to move, drag right side to look, buttons to jump / mine / place</td></tr>
     </table>
     <p style="margin-top:8px;color:#9fb2c8">Your edits and block stock are saved automatically in this browser. The bedrock at the bottom of the world cannot be mined.</p>
@@ -158,7 +172,8 @@
     <div><div id="controlsInfo">
       <b>WASD</b> move &nbsp;·&nbsp; <b>Mouse</b> look &nbsp;·&nbsp; <b>Hold left click</b> mine &nbsp;·&nbsp; <b>Right click</b> place<br>
       <b>1–0</b> choose block &nbsp;·&nbsp; <b>Space</b> jump &nbsp;·&nbsp; <b>2×Space / F</b> fly &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>H</b> help<br>
-      Mined blocks drop as items — walk close to collect them. Placing uses up your stock.
+      Mined blocks drop as items — walk close to collect them. Placing uses up your stock.<br>
+      Mossbacks &amp; Puffhens graze the meadows by day — but Shades come out at night.
     </div></div>
     <div id="loadInfo">Building world…</div>
     <div id="credit">A proof-of-capability build. Every texture is drawn in code — no assets copied from anywhere.</div>
@@ -226,6 +241,19 @@ function saveInv() {
 }
 function invAdd(b, n) { inv[b] = (inv[b] || 0) + n; refreshHotbar(); saveInv(); }
 function invTotal() { var s = 0; for (var k in inv) s += inv[k]; return s; }
+
+// ---------- hunt materials (dropped by creatures; not placeable blocks; persisted) ----------
+BLOCK_COLORS['meat'] = 0xc94f38; BLOCK_COLORS['feather'] = 0xf2ede2; BLOCK_COLORS['essence'] = 0x7a5cff;
+var MAT_NAMES = { meat: 'Meat', feather: 'Feather', essence: 'Shade Essence' };
+var materials = { meat: 0, feather: 0, essence: 0 };
+(function loadMats() {
+  try {
+    var raw = lsGet('vh_mats'); if (!raw) return;
+    var obj = JSON.parse(raw); if (!obj || typeof obj !== 'object') return;
+    for (var k in materials) if (typeof obj[k] === 'number' && obj[k] >= 0) materials[k] = Math.floor(obj[k]);
+  } catch (e) { /* keep zeros */ }
+})();
+function saveMats() { lsSet('vh_mats', JSON.stringify(materials)); }
 
 // ---------- storage (seed + block edits) ----------
 function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
@@ -670,7 +698,7 @@ try {
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.15;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.domElement.className = 'game';
@@ -680,7 +708,7 @@ scene.background = new THREE.Color(0x6fb7ff);
 scene.fog = new THREE.Fog(0x6fb7ff, 42, 135);
 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 900);
 scene.add(camera);
-hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x77644a, 0.9);
+hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x8a7355, 1.0);
 scene.add(hemiLight);
 sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
 sunLight.castShadow = true;
@@ -727,17 +755,17 @@ window.addEventListener('resize', function () {
 var FACES = [
   { dir: [-1, 0, 0], shade: 0.78, corners: [[0, 1, 0], [0, 0, 0], [0, 1, 1], [0, 0, 1]] },
   { dir: [1, 0, 0], shade: 0.78, corners: [[1, 1, 1], [1, 0, 1], [1, 1, 0], [1, 0, 0]] },
-  { dir: [0, -1, 0], shade: 0.5, corners: [[1, 0, 1], [0, 0, 1], [1, 0, 0], [0, 0, 0]] },
+  { dir: [0, -1, 0], shade: 0.60, corners: [[1, 0, 1], [0, 0, 1], [1, 0, 0], [0, 0, 0]] },
   { dir: [0, 1, 0], shade: 1.0, corners: [[0, 1, 1], [1, 1, 1], [0, 1, 0], [1, 1, 0]] },
-  { dir: [0, 0, -1], shade: 0.62, corners: [[1, 0, 0], [0, 0, 0], [1, 1, 0], [0, 1, 0]] },
-  { dir: [0, 0, 1], shade: 0.62, corners: [[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]] }
+  { dir: [0, 0, -1], shade: 0.68, corners: [[1, 0, 0], [0, 0, 0], [1, 1, 0], [0, 1, 0]] },
+  { dir: [0, 0, 1], shade: 0.68, corners: [[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]] }
 ];
 function newBucket() { return { pos: [], nor: [], uv: [], col: [], idx: [] }; }
 function aoAt(x, y, z) {
   var b = getBlock(x, y, z);
   return (b !== AIR && b !== GLASS && b !== TORCH && !isDeco(b)) ? 1 : 0;
 }
-var AO_LVL = [0.40, 0.62, 0.82, 1.0];
+var AO_LVL = [0.62, 0.76, 0.88, 1.0]; // v4: softer curve — shade reads as cool shadow, not darkness
 function pushFace(bk, x, y, z, face, tile, shadeMul) {
   var ndx = bk.pos.length / 3;
   var col = (tile % ATLAS_COLS) / ATLAS_COLS, row = Math.floor(tile / ATLAS_COLS);
@@ -991,7 +1019,7 @@ function updateSky(hours, px, py, pz) {
   scene.fog.far = 135 * weatherCur.fog;
   var flash = weatherCur.flash;
   // hemisphere + sun/moon lights (the Lambert world is lit by these)
-  hemiLight.intensity = (0.34 + 0.60 * dayness) * weatherCur.sun * (1 + flash * 2.2);
+  hemiLight.intensity = (0.30 + 0.88 * dayness) * weatherCur.sun * (1 + flash * 2.2); // v4: higher daylight fill lifts shadowed ground; night floor kept low
   hemiLight.color.copy(_sky).lerp(_white, 0.55);
   if (elev > -0.06) {
     _sunTint.setHex(0xffe7c4).lerp(_white, Math.min(1, elev * 1.6 + 0.25));
@@ -1117,6 +1145,29 @@ function spawnItem(x, y, z, block) {
   scene.add(mesh);
   items.push({ mesh: mesh, block: block, vy: 2.6, age: 0, resting: false, restY: 0, spin: Math.random() * 6.28 });
 }
+var matMats = null;
+var matMeatGeo = new THREE.BoxGeometry(0.32, 0.22, 0.32);
+var matFeatherGeo = new THREE.BoxGeometry(0.09, 0.34, 0.2);
+var matEssenceGeo = new THREE.BoxGeometry(0.26, 0.26, 0.26);
+function makeMatMesh(mat) {
+  if (!matMats) {
+    matMats = {
+      meat: new THREE.MeshBasicMaterial({ color: 0xc94f38 }),
+      feather: new THREE.MeshBasicMaterial({ color: 0xf2ede2 }),
+      essence: new THREE.MeshBasicMaterial({ color: 0x8a6aff })
+    };
+    allItemMats.push(matMats.meat); allItemMats.push(matMats.feather); // essence stays bright, like a glow
+  }
+  var geo = mat === 'feather' ? matFeatherGeo : (mat === 'meat' ? matMeatGeo : matEssenceGeo);
+  return new THREE.Mesh(geo, matMats[mat]);
+}
+function spawnMatItem(x, y, z, mat) {
+  if (items.length > 220) { var old = items.shift(); scene.remove(old.mesh); }
+  var mesh = makeMatMesh(mat);
+  mesh.position.set(x + 0.5 + (Math.random() - 0.5) * 0.24, y + 0.6, z + 0.5 + (Math.random() - 0.5) * 0.24);
+  scene.add(mesh);
+  items.push({ mesh: mesh, mat: mat, vy: 2.6, age: 0, resting: false, restY: 0, spin: Math.random() * 6.28 });
+}
 function groundTopAt(x, y, z) {
   var bx = Math.floor(x), bz = Math.floor(z);
   for (var yy = Math.min(Math.floor(y), WORLD_H - 1); yy >= 0; yy--) {
@@ -1134,8 +1185,14 @@ function updateItems(dt) {
     if (playing && it.age > 0.45 && dist < 2.5) {
       if (dist < 0.65) {
         scene.remove(m); items.splice(i, 1);
-        invAdd(it.block, 1);
-        spawnParticles(Math.floor(m.position.x), Math.floor(m.position.y), Math.floor(m.position.z), it.block);
+        if (it.mat) {
+          materials[it.mat]++; saveMats(); refreshMats();
+          spawnParticles(Math.floor(m.position.x), Math.floor(m.position.y), Math.floor(m.position.z), it.mat);
+          toast(MAT_NAMES[it.mat] + ' collected');
+        } else {
+          invAdd(it.block, 1);
+          spawnParticles(Math.floor(m.position.x), Math.floor(m.position.y), Math.floor(m.position.z), it.block);
+        }
         continue;
       }
       var sp = 3 + 8 * (1 - dist / 2.5);
@@ -1342,8 +1399,10 @@ function movePlayer(dt) {
   var wx = (ix * cos - iz * sin), wz = (ix * sin + iz * cos);
   var sprint = (keys['ShiftLeft'] || keys['ShiftRight']) && !player.fly;
   var speed = player.fly ? 11.5 : (sprint ? 7.2 : 4.4);
-  player.vel.x = wx * speed;
-  player.vel.z = wz * speed;
+  player.vel.x = wx * speed + (player.kbx || 0);
+  player.vel.z = wz * speed + (player.kbz || 0);
+  if (player.kbx) player.kbx *= Math.pow(0.02, dt);
+  if (player.kbz) player.kbz *= Math.pow(0.02, dt);
   if (player.fly) {
     var up = 0;
     if (keys['Space']) up += 1;
@@ -1779,7 +1838,20 @@ function animate() {
     var hit = raycastVoxel(6);
     if (hit) { highlight.visible = true; highlight.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5); }
     else highlight.visible = false;
-    updateMining(dt, hit);
+    // a creature standing in front of the targeted block takes the swing instead
+    mobSwingCd -= dt;
+    var mh = rayMobHit();
+    var blockDist = hit ? Math.hypot(hit.x + 0.5 - player.pos.x, hit.y + 0.5 - (player.pos.y + EYE), hit.z + 0.5 - player.pos.z) : Infinity;
+    if (mh && mh.dist <= blockDist) {
+      resetMining();
+      if ((mouseMineHeld || touchMineHeld) && mobSwingCd <= 0) {
+        mobSwingCd = 0.30;
+        triggerSwing();
+        damageMob(mh.mob, -Math.sin(player.yaw), -Math.cos(player.yaw));
+      }
+    } else {
+      updateMining(dt, hit);
+    }
     streamChunks(player.pos.x, player.pos.z);
   } else {
     // gentle menu orbit over the spawn meadow
@@ -1802,6 +1874,8 @@ function animate() {
   }
   updateParticles(dt);
   updateItems(dt);
+  updateMobs(dt);
+  updateHealth(dt);
   updatePops(dt);
   updateArm(dt);
   landDipV += (-landDipY * 120 - landDipV * 12) * dt;
@@ -1858,6 +1932,347 @@ function animate() {
   renderer.render(scene, camera);
 }
 
+// ---------- creatures (mobs): original voxel animals ----------
+// Mossbacks (big grazers) and Puffhens (little birds) wander the daylight
+// meadows; after dark, Shades stalk the player. All models are box-built
+// originals; behaviour is wander / graze / flee / hunt with voxel physics.
+var hearts = 10, hurtAgo = 99, regenT = 0, dmgFlashA = 0;
+var heartsEl = document.getElementById('hearts');
+var matsEl = document.getElementById('mats');
+var dmgFlashEl = document.getElementById('dmgFlash');
+function refreshHearts() {
+  var s = '';
+  for (var i = 0; i < 10; i++) s += i < hearts ? '\u2665' : '<span class="he">\u2665</span>';
+  heartsEl.innerHTML = s;
+}
+function refreshMats() {
+  matsEl.textContent = '\uD83C\uDF56\u00D7' + materials.meat + '  \uD83E\uDEB6\u00D7' + materials.feather + '  \uD83C\uDF11\u00D7' + materials.essence;
+}
+refreshHearts(); refreshMats();
+
+function damagePlayer(fromX, fromZ) {
+  if (!playing || hearts <= 0) return;
+  hearts--; hurtAgo = 0; regenT = 0; dmgFlashA = 0.55;
+  refreshHearts();
+  var dx = player.pos.x - fromX, dz = player.pos.z - fromZ;
+  var dl = Math.hypot(dx, dz) || 1;
+  player.kbx = (player.kbx || 0) + dx / dl * 7.5;
+  player.kbz = (player.kbz || 0) + dz / dl * 7.5;
+  if (!player.fly) player.vel.y = Math.max(player.vel.y, 5.2);
+  if (hearts <= 0) die();
+}
+function die() {
+  toast('You died \u2014 respawning');
+  for (var i = mobs.length - 1; i >= 0; i--) if (mobs[i].type === 'shade') removeMob(i);
+  player.pos.set(SPAWN.x, SPAWN.y, SPAWN.z);
+  player.vel.set(0, 0, 0); player.kbx = 0; player.kbz = 0;
+  hearts = 10; hurtAgo = 99; regenT = 0;
+  refreshHearts();
+}
+function updateHealth(dt) {
+  hurtAgo += dt;
+  if (hearts > 0 && hearts < 10 && hurtAgo > 10) {
+    regenT += dt;
+    if (regenT >= 20) { regenT = 0; hearts++; refreshHearts(); }
+  } else regenT = 0;
+  if (dmgFlashA > 0) { dmgFlashA = Math.max(0, dmgFlashA - dt * 1.6); dmgFlashEl.style.opacity = dmgFlashA.toFixed(3); }
+}
+
+// ----- models (unit-box geometry, scaled per part; pivots carry animation) -----
+var mobBoxGeo = new THREE.BoxGeometry(1, 1, 1);
+function mobMat(color) { return new THREE.MeshLambertMaterial({ color: color }); }
+function mobBox(mat, w, h, d, x, y, z, parent) {
+  var m = new THREE.Mesh(mobBoxGeo, mat);
+  m.scale.set(w, h, d); m.position.set(x, y, z);
+  m.castShadow = true;
+  parent.add(m);
+  return m;
+}
+function buildGrazer() { // "Mossback": mossy green-brown quadruped
+  var g = new THREE.Group(); var mats = [];
+  function M(c) { var m = mobMat(c); mats.push(m); return m; }
+  var bodyM = M(0x6d7a3f), mossM = M(0x87a04e), darkM = M(0x5d5238), snoutM = M(0x8a795a);
+  var body = new THREE.Group(); g.add(body);
+  mobBox(bodyM, 0.62, 0.55, 0.98, 0, 0.82, 0, body);          // torso
+  mobBox(mossM, 0.66, 0.12, 1.0, 0, 1.13, 0, body);           // mossy back slab
+  var head = new THREE.Group(); head.position.set(0, 0.92, -0.52); body.add(head);
+  mobBox(bodyM, 0.42, 0.4, 0.42, 0, 0.02, -0.14, head);       // head
+  mobBox(snoutM, 0.26, 0.2, 0.2, 0, -0.08, -0.4, head);       // snout
+  var legs = [];
+  [[-0.2, -0.34], [0.2, -0.34], [-0.2, 0.34], [0.2, 0.34]].forEach(function (lz) {
+    var pivot = new THREE.Group(); pivot.position.set(lz[0], 0.55, lz[1]); body.add(pivot);
+    mobBox(darkM, 0.16, 0.55, 0.16, 0, -0.27, 0, pivot);
+    legs.push(pivot);
+  });
+  return { group: g, mats: mats, legs: legs, head: head, body: body };
+}
+function buildPuffhen() { // round little cream bird
+  var g = new THREE.Group(); var mats = [];
+  function M(c) { var m = mobMat(c); mats.push(m); return m; }
+  var creamM = M(0xf0e7d3), beakM = M(0xe8963c);
+  var body = new THREE.Group(); g.add(body);
+  mobBox(creamM, 0.42, 0.36, 0.5, 0, 0.42, 0, body);          // round body
+  var tail = mobBox(creamM, 0.3, 0.24, 0.09, 0, 0.52, 0.3, body); tail.rotation.x = -0.7;
+  var head = new THREE.Group(); head.position.set(0, 0.58, -0.24); body.add(head);
+  mobBox(creamM, 0.3, 0.3, 0.3, 0, 0.1, -0.05, head);         // head
+  mobBox(beakM, 0.13, 0.08, 0.16, 0, 0.04, -0.26, head);      // beak
+  var wings = [];
+  [-1, 1].forEach(function (s) {
+    var pivot = new THREE.Group(); pivot.position.set(s * 0.21, 0.58, 0); body.add(pivot);
+    mobBox(creamM, 0.06, 0.28, 0.36, s * 0.03, -0.12, 0, pivot);
+    wings.push(pivot);
+  });
+  var legs = [];
+  [-0.09, 0.09].forEach(function (lx) {
+    var pivot = new THREE.Group(); pivot.position.set(lx, 0.24, 0); body.add(pivot);
+    mobBox(beakM, 0.05, 0.24, 0.05, 0, -0.12, 0, pivot);
+    legs.push(pivot);
+  });
+  return { group: g, mats: mats, legs: legs, head: head, body: body, wings: wings };
+}
+function buildShade() { // tall dark figure, glowing amber eyes
+  var g = new THREE.Group(); var mats = [];
+  function M(c) { var m = mobMat(c); mats.push(m); return m; }
+  var robeM = M(0x232733), headM = M(0x1b1e28);
+  var body = new THREE.Group(); g.add(body);
+  mobBox(robeM, 0.62, 0.62, 0.42, 0, 0.31, 0, body);          // robe skirt
+  mobBox(robeM, 0.54, 0.72, 0.36, 0, 0.95, 0, body);          // torso
+  var head = new THREE.Group(); head.position.set(0, 1.32, 0); body.add(head);
+  mobBox(headM, 0.4, 0.44, 0.4, 0, 0.22, 0, head);            // head
+  var eyeM = new THREE.MeshBasicMaterial({ color: 0xffb02e }); // unlit: glows in the dark
+  mobBox(eyeM, 0.07, 0.05, 0.03, -0.1, 0.24, -0.21, head);
+  mobBox(eyeM, 0.07, 0.05, 0.03, 0.1, 0.24, -0.21, head);
+  var arms = [];
+  [-1, 1].forEach(function (s) {
+    var pivot = new THREE.Group(); pivot.position.set(s * 0.33, 1.26, 0); body.add(pivot);
+    mobBox(robeM, 0.11, 0.82, 0.11, 0, -0.38, 0, pivot);
+    arms.push(pivot);
+  });
+  return { group: g, mats: mats, legs: [], head: head, body: body, arms: arms };
+}
+
+// ----- mob objects, physics, behaviour -----
+var mobs = [];
+var MOB_TYPES = {
+  grazer: { hp: 4, hw: 0.45, h: 1.15, speed: 1.15, fleeSpeed: 3.4, drop: 'meat' },
+  puffhen: { hp: 2, hw: 0.26, h: 0.62, speed: 1.5, fleeSpeed: 3.0, drop: 'feather' },
+  shade: { hp: 5, hw: 0.34, h: 1.78, speed: 2.35, fleeSpeed: 2.35, drop: 'essence' }
+};
+function spawnMob(type, x, y, z) {
+  if (mobs.length >= 12) return null;
+  var spec = MOB_TYPES[type]; if (!spec) return null;
+  var built = type === 'grazer' ? buildGrazer() : (type === 'puffhen' ? buildPuffhen() : buildShade());
+  built.group.position.set(x, y, z);
+  scene.add(built.group);
+  var mob = {
+    type: type, spec: spec, group: built.group, parts: built, mats: built.mats,
+    vel: new THREE.Vector3(), yaw: Math.random() * Math.PI * 2, targetYaw: 0,
+    hp: spec.hp, onGround: false, thinkT: 0.5 + Math.random(), stateT: 0, state: 'idle',
+    fleeT: 0, flashT: 0, atkCd: 0, animPhase: Math.random() * 6, hopT: 0, flapT: 0, kbx: 0, kbz: 0
+  };
+  mob.targetYaw = mob.yaw;
+  mobs.push(mob);
+  return mob;
+}
+function removeMob(i) {
+  var m = mobs[i];
+  scene.remove(m.group);
+  m.group.traverse(function (o) { if (o.isMesh && o.material && o.material.dispose) o.material.dispose(); });
+  mobs.splice(i, 1);
+}
+function mobCollide(m, x, y, z) {
+  var hw = m.spec.hw, h = m.spec.h;
+  var x0 = Math.floor(x - hw), x1 = Math.floor(x + hw);
+  var y0 = Math.floor(y), y1 = Math.floor(y + h - 0.001);
+  var z0 = Math.floor(z - hw), z1 = Math.floor(z + hw);
+  for (var bx = x0; bx <= x1; bx++) for (var by = y0; by <= y1; by++) for (var bz = z0; bz <= z1; bz++)
+    if (isSolid(bx, by, bz)) return true;
+  return false;
+}
+function mobStepAxis(m, axis, amt) {
+  if (amt === 0) return true;
+  var p = m.group.position;
+  var nx = p.x + (axis === 0 ? amt : 0), nz = p.z + (axis === 2 ? amt : 0);
+  if (!mobCollide(m, nx, p.y, nz)) { p.x = nx; p.z = nz; return true; }
+  if (m.onGround) { // step up a single block, like the player expects of a walker
+    for (var lift = 0.3; lift <= 1.06; lift += 0.25) {
+      if (!mobCollide(m, p.x, p.y + lift, p.z) && !mobCollide(m, nx, p.y + lift, nz)) {
+        p.y += lift; p.x = nx; p.z = nz; return true;
+      }
+    }
+  }
+  m.targetYaw += 1.1; // bumped into something: veer off
+  return false;
+}
+function updateMob(m, dt) {
+  var p = m.group.position;
+  var spec = m.spec;
+  var toPX = player.pos.x - p.x, toPZ = player.pos.z - p.z;
+  var distP = Math.hypot(toPX, toPZ);
+  if (m.flashT > 0) { m.flashT -= dt; if (m.flashT <= 0) m.mats.forEach(function (mt) { mt.emissive.setHex(0x000000); }); }
+  if (m.fleeT > 0) m.fleeT -= dt;
+  if (m.atkCd > 0) m.atkCd -= dt;
+  var speed = 0, wantMove = false;
+  if (m.type === 'shade') {
+    m.targetYaw = Math.atan2(-toPX, -toPZ);
+    if (distP > 1.15) { speed = spec.speed; wantMove = true; }
+    else if (m.atkCd <= 0 && playing && Math.abs((player.pos.y + 0.9) - (p.y + 0.9)) < 1.9) {
+      m.atkCd = 0.8;
+      damagePlayer(p.x, p.z);
+    }
+  } else {
+    if (playing && distP < 3.5 && Math.hypot(player.vel.x, player.vel.z) > 6) m.fleeT = Math.max(m.fleeT, 1.2);
+    if (m.fleeT > 0) {
+      m.targetYaw = Math.atan2(toPX, toPZ); // forward away from the player
+      speed = spec.fleeSpeed; wantMove = true;
+    } else {
+      m.thinkT -= dt;
+      if (m.thinkT <= 0) {
+        m.thinkT = 2 + Math.random() * 3;
+        var r = Math.random();
+        if (r < 0.30) { m.state = 'idle'; m.stateT = 1 + Math.random() * 2; }
+        else if (r < 0.55) { m.state = 'graze'; m.stateT = 2 + Math.random() * 1.6; }
+        else { m.state = 'walk'; m.stateT = 2.5 + Math.random() * 3; m.targetYaw = m.yaw + (Math.random() - 0.5) * 2.4; }
+      }
+      if (m.stateT > 0) m.stateT -= dt; else if (m.state === 'walk' || m.state === 'graze') m.state = 'idle';
+      if (m.state === 'walk') { speed = spec.speed; wantMove = true; }
+    }
+  }
+  // turn toward the target heading
+  var dy = m.targetYaw - m.yaw;
+  while (dy > Math.PI) dy -= Math.PI * 2;
+  while (dy < -Math.PI) dy += Math.PI * 2;
+  m.yaw += Math.max(-3.6 * dt, Math.min(3.6 * dt, dy));
+  m.group.rotation.y = m.yaw;
+  var fx = -Math.sin(m.yaw), fz = -Math.cos(m.yaw);
+  if (wantMove) { // shores: never willingly step where the ground dips under water
+    var ax = Math.floor(p.x + fx * 0.9), az = Math.floor(p.z + fz * 0.9);
+    if (heightAt(ax, az) <= WATER_Y + 1) { m.targetYaw += Math.PI * 0.9; wantMove = false; speed = 0; }
+  }
+  var vx = (wantMove ? fx * speed : 0) + m.kbx;
+  var vz = (wantMove ? fz * speed : 0) + m.kbz;
+  m.kbx -= m.kbx * Math.min(1, dt * 7); m.kbz -= m.kbz * Math.min(1, dt * 7);
+  if (m.type === 'puffhen' && wantMove && m.onGround) { // puffhens travel in hops
+    m.hopT -= dt;
+    if (m.hopT <= 0) { m.vel.y = 4.6; m.hopT = 0.42; m.flapT = 0.3; }
+  }
+  m.vel.y -= 27 * dt; if (m.vel.y < -40) m.vel.y = -40;
+  var inWater = heightAt(Math.floor(p.x), Math.floor(p.z)) < WATER_Y && p.y < WATER_Y + 0.4;
+  mobStepAxis(m, 0, vx * dt);
+  mobStepAxis(m, 2, vz * dt);
+  p.y += m.vel.y * dt;
+  m.onGround = false;
+  if (mobCollide(m, p.x, p.y, p.z)) {
+    if (m.vel.y <= 0) { var g2 = 0; while (mobCollide(m, p.x, p.y, p.z) && g2++ < 12) p.y += 0.05; m.onGround = true; }
+    else { var g3 = 0; while (mobCollide(m, p.x, p.y, p.z) && g3++ < 12) p.y -= 0.05; }
+    m.vel.y = 0;
+  }
+  if (inWater && p.y < WATER_Y + 0.15) p.y += (WATER_Y + 0.15 - p.y) * Math.min(1, dt * 4); // paddle at the surface
+  if (p.y < 1.2) { p.y = 1.2; m.vel.y = 0; m.onGround = true; }
+  // ---- animation: leg swing follows true speed; heads dip; wings flap ----
+  var hSpeed = wantMove ? speed : 0;
+  m.animPhase += hSpeed * dt * 2.4;
+  var swingAmp = hSpeed > 0 ? 0.62 : 0;
+  for (var li = 0; li < m.parts.legs.length; li++) {
+    var off = (m.type === 'grazer') ? ((li === 0 || li === 3) ? 0 : Math.PI) : (li === 0 ? 0 : Math.PI);
+    m.parts.legs[li].rotation.x = Math.sin(m.animPhase + off) * swingAmp;
+  }
+  var bobA = m.type === 'shade' ? 0.05 : 0.035;
+  m.parts.body.position.y = hSpeed > 0 ? Math.abs(Math.sin(m.animPhase)) * bobA : Math.sin(perfT * 1.7 + m.animPhase) * 0.008;
+  var dip = 0;
+  if (m.state === 'graze' && m.fleeT <= 0 && m.type !== 'shade')
+    dip = m.type === 'puffhen' ? 0.45 + Math.sin(perfT * 7 + m.animPhase) * 0.25 : 0.6;
+  m.parts.head.rotation.x += (-dip - m.parts.head.rotation.x) * Math.min(1, dt * 6);
+  if (m.parts.wings) {
+    if (m.flapT > 0) m.flapT -= dt;
+    var flap = (m.flapT > 0 || !m.onGround) ? Math.sin(perfT * 42) * 0.65 : 0;
+    m.parts.wings[0].rotation.z = 0.18 + flap;
+    m.parts.wings[1].rotation.z = -0.18 - flap;
+  }
+  if (m.parts.arms) {
+    m.parts.arms[0].rotation.x = Math.sin(m.animPhase * 0.9) * 0.34;
+    m.parts.arms[1].rotation.x = -Math.sin(m.animPhase * 0.9) * 0.34;
+  }
+}
+var mobSpawnT = 0;
+function isNightHours(hours) { return hours >= 19.5 || hours <= 5.0; }
+function countType(t) { var n = 0; for (var i = 0; i < mobs.length; i++) if (mobs[i].type === t) n++; return n; }
+function trySpawnNear(type, minD, maxD, needGrass) {
+  for (var tries = 0; tries < 8; tries++) {
+    var ang = Math.random() * Math.PI * 2, dist = minD + Math.random() * (maxD - minD);
+    var x = Math.floor(player.pos.x + Math.cos(ang) * dist), z = Math.floor(player.pos.z + Math.sin(ang) * dist);
+    var h = heightAt(x, z);
+    if (h <= WATER_Y + 1) continue;
+    if (needGrass && getBlock(x, h, z) !== GRASS) continue;
+    return spawnMob(type, x + 0.5, h + 1.02, z + 0.5);
+  }
+  return null;
+}
+function updateMobs(dt) {
+  var night = isNightHours(dayTime * 24);
+  for (var i = mobs.length - 1; i >= 0; i--) {
+    var m = mobs[i];
+    var dx = m.group.position.x - player.pos.x, dz = m.group.position.z - player.pos.z;
+    if (dx * dx + dz * dz > 64 * 64) { removeMob(i); continue; }
+    if (m.type === 'shade' && !night) { // dawn takes them
+      spawnParticles(Math.floor(m.group.position.x), Math.floor(m.group.position.y + 1), Math.floor(m.group.position.z), 'essence');
+      removeMob(i); continue;
+    }
+    updateMob(m, dt);
+  }
+  mobSpawnT -= dt;
+  if (mobSpawnT <= 0) {
+    mobSpawnT = 1.0;
+    if (!night && countType('grazer') + countType('puffhen') < 8)
+      trySpawnNear(Math.random() < 0.55 ? 'grazer' : 'puffhen', 16, 38, true);
+    if (night && countType('shade') < 3) trySpawnNear('shade', 22, 38, false);
+  }
+}
+function damageMob(m, dirX, dirZ) {
+  m.hp -= 1;
+  m.flashT = 0.13;
+  m.mats.forEach(function (mt) { mt.emissive.setHex(0xa01818); });
+  m.kbx = dirX * 5.5; m.kbz = dirZ * 5.5;
+  m.vel.y = Math.max(m.vel.y, 4.2);
+  if (m.type !== 'shade') { m.fleeT = 3; m.state = 'walk'; m.stateT = 3; }
+  spawnParticles(Math.floor(m.group.position.x), Math.floor(m.group.position.y + 0.6), Math.floor(m.group.position.z), m.spec.drop);
+  if (m.hp <= 0) {
+    var px = Math.floor(m.group.position.x), py = Math.floor(m.group.position.y + 0.5), pz = Math.floor(m.group.position.z);
+    spawnParticles(px, py, pz, m.spec.drop);
+    spawnMatItem(px, py, pz, m.spec.drop);
+    var idx = mobs.indexOf(m);
+    if (idx >= 0) removeMob(idx);
+  }
+}
+var mobSwingCd = 0;
+function rayMobHit() { // nearest creature under the crosshair, up to 3.5 blocks
+  var ox = player.pos.x, oy = player.pos.y + EYE, oz = player.pos.z;
+  var dx = -Math.sin(player.yaw) * Math.cos(player.pitch);
+  var dy = Math.sin(player.pitch);
+  var dz = -Math.cos(player.yaw) * Math.cos(player.pitch);
+  var o = [ox, oy, oz], d = [dx, dy, dz];
+  var best = null, bestT = 3.5;
+  for (var i = 0; i < mobs.length; i++) {
+    var m = mobs[i], p = m.group.position;
+    var hw = m.spec.hw + 0.12, hh = m.spec.h;
+    var mn = [p.x - hw, p.y, p.z - hw], mx = [p.x + hw, p.y + hh, p.z + hw];
+    var tmin = 0, tmax = bestT, ok = true;
+    for (var a = 0; a < 3; a++) {
+      if (Math.abs(d[a]) < 1e-8) { if (o[a] < mn[a] || o[a] > mx[a]) { ok = false; break; } }
+      else {
+        var t1 = (mn[a] - o[a]) / d[a], t2 = (mx[a] - o[a]) / d[a];
+        if (t1 > t2) { var tt = t1; t1 = t2; t2 = tt; }
+        if (t1 > tmin) tmin = t1;
+        if (t2 < tmax) tmax = t2;
+        if (tmin > tmax) { ok = false; break; }
+      }
+    }
+    if (ok) { best = m; bestT = Math.max(tmin, 0.01); }
+  }
+  return best ? { mob: best, dist: bestT } : null;
+}
+
+
 // ---------- start / new world ----------
 function startGame() {
   if (playing) return;
@@ -1871,6 +2286,7 @@ document.getElementById('btnPlay').addEventListener('click', startGame);
 document.getElementById('btnNew').addEventListener('click', function () {
   lsDel('vh_edits');
   lsDel('vh_inv');
+  lsDel('vh_mats');
   lsSet('vh_seed', String(Math.floor(Math.random() * 900000) + 100000));
   window.location.reload();
 });
@@ -1887,6 +2303,9 @@ window.__VH.getState = function () {
     miningProgress: mining.active ? +mining.progress.toFixed(3) : 0,
     weather: weather.to,
     shadowsOn: shadowsOn,
+    hearts: hearts,
+    materials: { meat: materials.meat, feather: materials.feather, essence: materials.essence },
+    mobs: mobs.length,
     errors: window.__VH.errors
   };
 };
@@ -1914,6 +2333,21 @@ window.__VH.debug = {
   setTime: function (h01) { dayTime = ((h01 % 1) + 1) % 1; },
   setBlock: function (x, y, z, id) { setBlockAndSave(x, y, z, id); },
   torchCount: function () { return torchPts.length; },
+  spawnMob: function (type) {
+    var fx = player.pos.x - Math.sin(player.yaw) * 5, fz = player.pos.z - Math.cos(player.yaw) * 5;
+    var bx = Math.floor(fx), bz = Math.floor(fz);
+    var m = spawnMob(type || 'grazer', bx + 0.5, heightAt(bx, bz) + 1.02, bz + 0.5);
+    return m ? { type: m.type, x: m.group.position.x, y: m.group.position.y, z: m.group.position.z, hp: m.hp } : null;
+  },
+  mobs: function () { return mobs.map(function (m) { return { type: m.type, x: +m.group.position.x.toFixed(2), y: +m.group.position.y.toFixed(2), z: +m.group.position.z.toFixed(2), hp: m.hp }; }); },
+  clearMobs: function () { for (var i = mobs.length - 1; i >= 0; i--) removeMob(i); },
+  mats: function () { return { meat: materials.meat, feather: materials.feather, essence: materials.essence }; },
+  hearts: function () { return hearts; },
+  aimAt: function (x, y, z) {
+    var dx = x - player.pos.x, dy = y - (player.pos.y + EYE), dz = z - player.pos.z;
+    player.yaw = Math.atan2(-dx, -dz);
+    player.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  },
   ids: { GRASS: GRASS, DIRT: DIRT, STONE: STONE, COAL: COAL, IRON: IRON, GOLD: GOLD, DIAMOND: DIAMOND, STONEBRICK: STONEBRICK, TORCH: TORCH, FLOWER_RED: FLOWER_RED, FLOWER_YEL: FLOWER_YEL, TALLGRASS: TALLGRASS }
 };
 animate();
